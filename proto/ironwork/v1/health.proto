@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package ironwork.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// HealthService is served by every Ironwork process. Check reports the health
+// of the serving process itself. ClusterCheck is implemented only by the
+// observer, which fans out Check calls to every component (plus a Postgres
+// ping) and aggregates the results; the gateway's REST /health endpoint is
+// backed by ClusterCheck.
+service HealthService {
+  rpc Check(CheckRequest) returns (CheckResponse);
+  rpc ClusterCheck(ClusterCheckRequest) returns (ClusterCheckResponse);
+}
+
+enum ServingStatus {
+  SERVING_STATUS_UNSPECIFIED = 0;
+  SERVING_STATUS_SERVING = 1;
+  SERVING_STATUS_NOT_SERVING = 2;
+}
+
+message CheckRequest {}
+
+message CheckResponse {
+  // Component kind of the responder (e.g. "scheduler").
+  string component = 1;
+  // Instance name of the responder (e.g. "scheduler-2").
+  string instance = 2;
+  ServingStatus status = 3;
+}
+
+message ClusterCheckRequest {}
+
+message ClusterCheckResponse {
+  // SERVING only if every component below is SERVING.
+  ServingStatus status = 1;
+  repeated ComponentHealth components = 2;
+  google.protobuf.Timestamp checked_at = 3;
+}
+
+message ComponentHealth {
+  // Instance name (e.g. "scheduler-2", "postgres-primary").
+  string name = 1;
+  ServingStatus status = 2;
+  // Failure detail when not serving (dial error, ping error, ...).
+  string message = 3;
+}

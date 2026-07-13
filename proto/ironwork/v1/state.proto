@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package ironwork.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// StateService exposes cluster state snapshots. In Phase 5 the statemanager
+// gains CRDT replication RPCs here; Phase 0 only defines the read contract.
+service StateService {
+  rpc GetClusterState(GetClusterStateRequest) returns (GetClusterStateResponse);
+}
+
+message GetClusterStateRequest {}
+
+message GetClusterStateResponse {
+  ClusterState state = 1;
+}
+
+message ClusterState {
+  // Node that produced this snapshot.
+  string reporting_node = 1;
+  repeated NodeInfo nodes = 2;
+  JobCounts job_counts = 3;
+  google.protobuf.Timestamp as_of = 4;
+}
+
+message NodeInfo {
+  string id = 1;
+  // Component kind: gateway, scheduler, worker, statemanager, observer.
+  string component = 2;
+  string address = 3;
+}
+
+message JobCounts {
+  uint64 pending = 1;
+  uint64 scheduled = 2;
+  uint64 running = 3;
+  uint64 succeeded = 4;
+  uint64 failed = 5;
+}

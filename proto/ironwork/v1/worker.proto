@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package ironwork.v1;
+
+import "google/protobuf/timestamp.proto";
+import "ironwork/v1/job.proto";
+
+// WorkerService is the control-plane contract between workers and the
+// scheduler: registration, heartbeats (capacity signals feed backpressure in
+// Phase 4), and job result reporting.
+service WorkerService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc ReportJobResult(ReportJobResultRequest) returns (ReportJobResultResponse);
+}
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string address = 2;
+  // Maximum number of jobs this worker can run concurrently.
+  uint32 capacity = 3;
+}
+
+message RegisterWorkerResponse {
+  // Interval the worker must heartbeat at to be considered alive.
+  uint32 heartbeat_interval_seconds = 1;
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  uint32 capacity = 2;
+  // Jobs currently executing; capacity - inflight is free headroom.
+  uint32 inflight = 3;
+  google.protobuf.Timestamp sent_at = 4;
+}
+
+message HeartbeatResponse {}
+
+message ReportJobResultRequest {
+  string worker_id = 1;
+  string job_id = 2;
+  JobStatus status = 3;
+  string error = 4;
+}
+
+message ReportJobResultResponse {}
