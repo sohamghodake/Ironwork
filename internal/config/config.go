@@ -48,7 +48,8 @@ func Load(component string) (*Config, error) {
 	v.SetDefault("instance", component)
 	v.SetDefault("http_addr", ":8080")
 	v.SetDefault("grpc_addr", ":9443")
-	v.SetDefault("db_dsn", "postgres://ironwork:ironwork@localhost:5432/ironwork?sslmode=disable")
+	// Host port 5433 matches the compose mapping for postgres-primary.
+	v.SetDefault("db_dsn", "postgres://ironwork:ironwork@localhost:5433/ironwork?sslmode=disable")
 	v.SetDefault("observer_addr", "observer:9443")
 	v.SetDefault("targets", "")
 	v.SetDefault("log_level", "info")

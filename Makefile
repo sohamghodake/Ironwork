@@ -36,7 +36,7 @@ down: ## Stop the cluster and drop volumes
 logs: ## Tail cluster logs
 	$(COMPOSE) logs -f
 
-migrate: ## Apply migrations to localhost:5432 (outside compose)
+migrate: ## Apply migrations to localhost:5433 (outside compose)
 	go run ./cmd/migrate
 
 clean: down ## down + remove generated certs

@@ -27,7 +27,8 @@ services:
       - pg-primary-data:/var/lib/postgresql/data
       - ./deploy/postgres/primary-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
     ports:
-      - "5432:5432"
+      # Host 5433: another local project commonly owns 5432.
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ironwork -d ironwork"]
       interval: 5s
