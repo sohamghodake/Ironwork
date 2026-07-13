@@ -1,0 +1,15 @@
+# Binaries
+/bin/
+*.exe
+
+# TLS material — generated locally via `make certs`, never committed
+/certs/
+
+# Local env / editor
+.env
+.env.*
+.vscode/
+.idea/
+
+# Test artifacts
+coverage.out
