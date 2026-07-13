@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("open database")
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// The compose healthcheck gates on pg_isready, but the server can still
 	// refuse connections briefly after that; poll until reachable.

@@ -65,7 +65,7 @@ func GRPCTargetChecker(tlsCfg *tls.Config) TargetChecker {
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		_, err = ironworkv1.NewHealthServiceClient(conn).Check(ctx, &ironworkv1.CheckRequest{})
 		return err
 	}

@@ -32,7 +32,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Str("addr", cfg.ObserverAddr).Msg("create observer client")
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

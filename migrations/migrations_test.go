@@ -40,7 +40,7 @@ func TestMigrationsApply(t *testing.T) {
 
 	db, err := sql.Open("pgx", dsn)
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	goose.SetBaseFS(migrations.FS)
 	require.NoError(t, goose.SetDialect("postgres"))

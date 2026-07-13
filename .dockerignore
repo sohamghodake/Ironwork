@@ -1,0 +1,5 @@
+.git
+certs
+bin
+Dockerfile
+docker-compose.yml

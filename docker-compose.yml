@@ -1,0 +1,160 @@
+name: ironwork
+
+# mTLS material comes from `make certs` (mkcert). Nothing connects without it.
+x-tls-env: &tls-env
+  IRONWORK_TLS_CERT_FILE: /certs/service.pem
+  IRONWORK_TLS_KEY_FILE: /certs/service-key.pem
+  IRONWORK_TLS_CA_FILE: /certs/ca.pem
+  IRONWORK_LOG_LEVEL: info
+
+x-service: &service
+  restart: unless-stopped
+  volumes:
+    - ./certs:/certs:ro
+
+x-db-dsn: &db-dsn postgres://ironwork:ironwork@postgres-primary:5432/ironwork?sslmode=disable
+
+services:
+  postgres-primary:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ironwork
+      POSTGRES_PASSWORD: ironwork
+      POSTGRES_DB: ironwork
+      REPLICATION_PASSWORD: replicate
+    command: postgres -c wal_level=replica -c max_wal_senders=5 -c wal_keep_size=128MB
+    volumes:
+      - pg-primary-data:/var/lib/postgresql/data
+      - ./deploy/postgres/primary-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ironwork -d ironwork"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Streaming replica. Phase 0 requires only the primary; this exists so later
+  # phases can exercise read scaling and failover.
+  postgres-replica:
+    image: postgres:16-alpine
+    user: postgres
+    entrypoint: ["/replica-entrypoint.sh"]
+    environment:
+      REPLICATION_PASSWORD: replicate
+    volumes:
+      - pg-replica-data:/var/lib/postgresql/data
+      - ./deploy/postgres/replica-entrypoint.sh:/replica-entrypoint.sh:ro
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+
+  # One-shot: applies goose migrations, then exits.
+  migrate:
+    build:
+      context: .
+      args: { SERVICE: migrate }
+    image: ironwork-migrate
+    environment:
+      IRONWORK_DB_DSN: *db-dsn
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    restart: "no"
+
+  scheduler-1:
+    <<: *service
+    build:
+      context: .
+      args: { SERVICE: scheduler }
+    image: ironwork-scheduler
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: scheduler-1
+
+  scheduler-2:
+    <<: *service
+    image: ironwork-scheduler
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: scheduler-2
+    depends_on:
+      - scheduler-1
+
+  scheduler-3:
+    <<: *service
+    image: ironwork-scheduler
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: scheduler-3
+    depends_on:
+      - scheduler-1
+
+  worker-1:
+    <<: *service
+    build:
+      context: .
+      args: { SERVICE: worker }
+    image: ironwork-worker
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: worker-1
+
+  worker-2:
+    <<: *service
+    image: ironwork-worker
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: worker-2
+    depends_on:
+      - worker-1
+
+  statemanager:
+    <<: *service
+    build:
+      context: .
+      args: { SERVICE: statemanager }
+    image: ironwork-statemanager
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: statemanager
+
+  observer:
+    <<: *service
+    build:
+      context: .
+      args: { SERVICE: observer }
+    image: ironwork-observer
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: observer
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_TARGETS: >-
+        scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443,worker-1=worker-1:9443,worker-2=worker-2:9443,statemanager=statemanager:9443
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    <<: *service
+    build:
+      context: .
+      args: { SERVICE: gateway }
+    image: ironwork-gateway
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: gateway
+      IRONWORK_OBSERVER_ADDR: observer:9443
+    ports:
+      - "8080:8080"
+    depends_on:
+      - observer
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg-primary-data:
+  pg-replica-data:
