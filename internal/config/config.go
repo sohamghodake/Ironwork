@@ -26,7 +26,13 @@ type Config struct {
 	ObserverAddr string
 	// Targets maps instance name -> gRPC address for observer fan-out checks,
 	// parsed from "name=addr,name=addr" form.
-	Targets  map[string]string
+	Targets map[string]string
+	// Workers maps instance name -> gRPC address for gateway job dispatch
+	// (Phase 1; the scheduler takes over placement in Phase 2). Same format
+	// as Targets.
+	Workers map[string]string
+	// Capacity is the max number of jobs a worker executes concurrently.
+	Capacity int
 	LogLevel string
 	TLS      TLSPaths
 }
@@ -52,6 +58,8 @@ func Load(component string) (*Config, error) {
 	v.SetDefault("db_dsn", "postgres://ironwork:ironwork@localhost:5433/ironwork?sslmode=disable")
 	v.SetDefault("observer_addr", "observer:9443")
 	v.SetDefault("targets", "")
+	v.SetDefault("workers", "")
+	v.SetDefault("capacity", 4)
 	v.SetDefault("log_level", "info")
 	v.SetDefault("tls.cert_file", "certs/service.pem")
 	v.SetDefault("tls.key_file", "certs/service-key.pem")
@@ -60,6 +68,10 @@ func Load(component string) (*Config, error) {
 	targets, err := parseTargets(v.GetString("targets"))
 	if err != nil {
 		return nil, fmt.Errorf("config: invalid IRONWORK_TARGETS: %w", err)
+	}
+	workers, err := parseTargets(v.GetString("workers"))
+	if err != nil {
+		return nil, fmt.Errorf("config: invalid IRONWORK_WORKERS: %w", err)
 	}
 
 	return &Config{
@@ -70,6 +82,8 @@ func Load(component string) (*Config, error) {
 		DBDSN:        v.GetString("db_dsn"),
 		ObserverAddr: v.GetString("observer_addr"),
 		Targets:      targets,
+		Workers:      workers,
+		Capacity:     v.GetInt("capacity"),
 		LogLevel:     v.GetString("log_level"),
 		TLS: TLSPaths{
 			CertFile: v.GetString("tls.cert_file"),
