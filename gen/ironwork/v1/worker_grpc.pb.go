@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	WorkerService_ExecuteJob_FullMethodName      = "/ironwork.v1.WorkerService/ExecuteJob"
 	WorkerService_RegisterWorker_FullMethodName  = "/ironwork.v1.WorkerService/RegisterWorker"
 	WorkerService_Heartbeat_FullMethodName       = "/ironwork.v1.WorkerService/Heartbeat"
 	WorkerService_ReportJobResult_FullMethodName = "/ironwork.v1.WorkerService/ReportJobResult"
@@ -28,10 +29,15 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// WorkerService is the control-plane contract between workers and the
-// scheduler: registration, heartbeats (capacity signals feed backpressure in
-// Phase 4), and job result reporting.
+// WorkerService is the control-plane contract around workers.
+//
+// ExecuteJob is served BY the worker: the placer (gateway in Phase 1, the
+// scheduler from Phase 2 on) dispatches a job and the worker acks acceptance,
+// then executes asynchronously and writes status transitions to Postgres.
+// RegisterWorker/Heartbeat/ReportJobResult are the worker-as-client half,
+// served by the scheduler from Phase 2/4 on.
 type WorkerServiceClient interface {
+	ExecuteJob(ctx context.Context, in *ExecuteJobRequest, opts ...grpc.CallOption) (*ExecuteJobResponse, error)
 	RegisterWorker(ctx context.Context, in *RegisterWorkerRequest, opts ...grpc.CallOption) (*RegisterWorkerResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	ReportJobResult(ctx context.Context, in *ReportJobResultRequest, opts ...grpc.CallOption) (*ReportJobResultResponse, error)
@@ -43,6 +49,16 @@ type workerServiceClient struct {
 
 func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 	return &workerServiceClient{cc}
+}
+
+func (c *workerServiceClient) ExecuteJob(ctx context.Context, in *ExecuteJobRequest, opts ...grpc.CallOption) (*ExecuteJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteJobResponse)
+	err := c.cc.Invoke(ctx, WorkerService_ExecuteJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *workerServiceClient) RegisterWorker(ctx context.Context, in *RegisterWorkerRequest, opts ...grpc.CallOption) (*RegisterWorkerResponse, error) {
@@ -79,10 +95,15 @@ func (c *workerServiceClient) ReportJobResult(ctx context.Context, in *ReportJob
 // All implementations must embed UnimplementedWorkerServiceServer
 // for forward compatibility.
 //
-// WorkerService is the control-plane contract between workers and the
-// scheduler: registration, heartbeats (capacity signals feed backpressure in
-// Phase 4), and job result reporting.
+// WorkerService is the control-plane contract around workers.
+//
+// ExecuteJob is served BY the worker: the placer (gateway in Phase 1, the
+// scheduler from Phase 2 on) dispatches a job and the worker acks acceptance,
+// then executes asynchronously and writes status transitions to Postgres.
+// RegisterWorker/Heartbeat/ReportJobResult are the worker-as-client half,
+// served by the scheduler from Phase 2/4 on.
 type WorkerServiceServer interface {
+	ExecuteJob(context.Context, *ExecuteJobRequest) (*ExecuteJobResponse, error)
 	RegisterWorker(context.Context, *RegisterWorkerRequest) (*RegisterWorkerResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	ReportJobResult(context.Context, *ReportJobResultRequest) (*ReportJobResultResponse, error)
@@ -96,6 +117,9 @@ type WorkerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWorkerServiceServer struct{}
 
+func (UnimplementedWorkerServiceServer) ExecuteJob(context.Context, *ExecuteJobRequest) (*ExecuteJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExecuteJob not implemented")
+}
 func (UnimplementedWorkerServiceServer) RegisterWorker(context.Context, *RegisterWorkerRequest) (*RegisterWorkerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterWorker not implemented")
 }
@@ -124,6 +148,24 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&WorkerService_ServiceDesc, srv)
+}
+
+func _WorkerService_ExecuteJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).ExecuteJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_ExecuteJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).ExecuteJob(ctx, req.(*ExecuteJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _WorkerService_RegisterWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -187,6 +229,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ironwork.v1.WorkerService",
 	HandlerType: (*WorkerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ExecuteJob",
+			Handler:    _WorkerService_ExecuteJob_Handler,
+		},
 		{
 			MethodName: "RegisterWorker",
 			Handler:    _WorkerService_RegisterWorker_Handler,

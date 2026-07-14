@@ -22,6 +22,113 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ExecuteJobRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Job row already persisted by the placer; the worker owns all subsequent
+	// status transitions (scheduled -> running -> succeeded/failed).
+	JobId         string `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Payload       []byte `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteJobRequest) Reset() {
+	*x = ExecuteJobRequest{}
+	mi := &file_ironwork_v1_worker_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteJobRequest) ProtoMessage() {}
+
+func (x *ExecuteJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_worker_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteJobRequest.ProtoReflect.Descriptor instead.
+func (*ExecuteJobRequest) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ExecuteJobRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *ExecuteJobRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ExecuteJobRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+type ExecuteJobResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Instance name of the accepting worker.
+	WorkerInstance string `protobuf:"bytes,1,opt,name=worker_instance,json=workerInstance,proto3" json:"worker_instance,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExecuteJobResponse) Reset() {
+	*x = ExecuteJobResponse{}
+	mi := &file_ironwork_v1_worker_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteJobResponse) ProtoMessage() {}
+
+func (x *ExecuteJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_worker_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteJobResponse.ProtoReflect.Descriptor instead.
+func (*ExecuteJobResponse) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ExecuteJobResponse) GetWorkerInstance() string {
+	if x != nil {
+		return x.WorkerInstance
+	}
+	return ""
+}
+
 type RegisterWorkerRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	WorkerId string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
@@ -34,7 +141,7 @@ type RegisterWorkerRequest struct {
 
 func (x *RegisterWorkerRequest) Reset() {
 	*x = RegisterWorkerRequest{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[0]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -46,7 +153,7 @@ func (x *RegisterWorkerRequest) String() string {
 func (*RegisterWorkerRequest) ProtoMessage() {}
 
 func (x *RegisterWorkerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[0]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,7 +166,7 @@ func (x *RegisterWorkerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWorkerRequest.ProtoReflect.Descriptor instead.
 func (*RegisterWorkerRequest) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{0}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RegisterWorkerRequest) GetWorkerId() string {
@@ -93,7 +200,7 @@ type RegisterWorkerResponse struct {
 
 func (x *RegisterWorkerResponse) Reset() {
 	*x = RegisterWorkerResponse{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[1]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -105,7 +212,7 @@ func (x *RegisterWorkerResponse) String() string {
 func (*RegisterWorkerResponse) ProtoMessage() {}
 
 func (x *RegisterWorkerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[1]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -118,7 +225,7 @@ func (x *RegisterWorkerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWorkerResponse.ProtoReflect.Descriptor instead.
 func (*RegisterWorkerResponse) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{1}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RegisterWorkerResponse) GetHeartbeatIntervalSeconds() uint32 {
@@ -141,7 +248,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[2]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -153,7 +260,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[2]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -166,7 +273,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{2}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *HeartbeatRequest) GetWorkerId() string {
@@ -205,7 +312,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[3]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +324,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[3]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +337,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{3}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{5}
 }
 
 type ReportJobResultRequest struct {
@@ -245,7 +352,7 @@ type ReportJobResultRequest struct {
 
 func (x *ReportJobResultRequest) Reset() {
 	*x = ReportJobResultRequest{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[4]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -257,7 +364,7 @@ func (x *ReportJobResultRequest) String() string {
 func (*ReportJobResultRequest) ProtoMessage() {}
 
 func (x *ReportJobResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[4]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -270,7 +377,7 @@ func (x *ReportJobResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportJobResultRequest.ProtoReflect.Descriptor instead.
 func (*ReportJobResultRequest) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{4}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ReportJobResultRequest) GetWorkerId() string {
@@ -309,7 +416,7 @@ type ReportJobResultResponse struct {
 
 func (x *ReportJobResultResponse) Reset() {
 	*x = ReportJobResultResponse{}
-	mi := &file_ironwork_v1_worker_proto_msgTypes[5]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +428,7 @@ func (x *ReportJobResultResponse) String() string {
 func (*ReportJobResultResponse) ProtoMessage() {}
 
 func (x *ReportJobResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_worker_proto_msgTypes[5]
+	mi := &file_ironwork_v1_worker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,14 +441,20 @@ func (x *ReportJobResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportJobResultResponse.ProtoReflect.Descriptor instead.
 func (*ReportJobResultResponse) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{5}
+	return file_ironwork_v1_worker_proto_rawDescGZIP(), []int{7}
 }
 
 var File_ironwork_v1_worker_proto protoreflect.FileDescriptor
 
 const file_ironwork_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x18ironwork/v1/worker.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15ironwork/v1/job.proto\"j\n" +
+	"\x18ironwork/v1/worker.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15ironwork/v1/job.proto\"X\n" +
+	"\x11ExecuteJobRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload\"=\n" +
+	"\x12ExecuteJobResponse\x12'\n" +
+	"\x0fworker_instance\x18\x01 \x01(\tR\x0eworkerInstance\"j\n" +
 	"\x15RegisterWorkerRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
@@ -359,8 +472,10 @@ const file_ironwork_v1_worker_proto_rawDesc = "" +
 	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12.\n" +
 	"\x06status\x18\x03 \x01(\x0e2\x16.ironwork.v1.JobStatusR\x06status\x12\x14\n" +
 	"\x05error\x18\x04 \x01(\tR\x05error\"\x19\n" +
-	"\x17ReportJobResultResponse2\x94\x02\n" +
-	"\rWorkerService\x12Y\n" +
+	"\x17ReportJobResultResponse2\xe3\x02\n" +
+	"\rWorkerService\x12M\n" +
+	"\n" +
+	"ExecuteJob\x12\x1e.ironwork.v1.ExecuteJobRequest\x1a\x1f.ironwork.v1.ExecuteJobResponse\x12Y\n" +
 	"\x0eRegisterWorker\x12\".ironwork.v1.RegisterWorkerRequest\x1a#.ironwork.v1.RegisterWorkerResponse\x12J\n" +
 	"\tHeartbeat\x12\x1d.ironwork.v1.HeartbeatRequest\x1a\x1e.ironwork.v1.HeartbeatResponse\x12\\\n" +
 	"\x0fReportJobResult\x12#.ironwork.v1.ReportJobResultRequest\x1a$.ironwork.v1.ReportJobResultResponseB\xa8\x01\n" +
@@ -378,28 +493,32 @@ func file_ironwork_v1_worker_proto_rawDescGZIP() []byte {
 	return file_ironwork_v1_worker_proto_rawDescData
 }
 
-var file_ironwork_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_ironwork_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_ironwork_v1_worker_proto_goTypes = []any{
-	(*RegisterWorkerRequest)(nil),   // 0: ironwork.v1.RegisterWorkerRequest
-	(*RegisterWorkerResponse)(nil),  // 1: ironwork.v1.RegisterWorkerResponse
-	(*HeartbeatRequest)(nil),        // 2: ironwork.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),       // 3: ironwork.v1.HeartbeatResponse
-	(*ReportJobResultRequest)(nil),  // 4: ironwork.v1.ReportJobResultRequest
-	(*ReportJobResultResponse)(nil), // 5: ironwork.v1.ReportJobResultResponse
-	(*timestamppb.Timestamp)(nil),   // 6: google.protobuf.Timestamp
-	(JobStatus)(0),                  // 7: ironwork.v1.JobStatus
+	(*ExecuteJobRequest)(nil),       // 0: ironwork.v1.ExecuteJobRequest
+	(*ExecuteJobResponse)(nil),      // 1: ironwork.v1.ExecuteJobResponse
+	(*RegisterWorkerRequest)(nil),   // 2: ironwork.v1.RegisterWorkerRequest
+	(*RegisterWorkerResponse)(nil),  // 3: ironwork.v1.RegisterWorkerResponse
+	(*HeartbeatRequest)(nil),        // 4: ironwork.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),       // 5: ironwork.v1.HeartbeatResponse
+	(*ReportJobResultRequest)(nil),  // 6: ironwork.v1.ReportJobResultRequest
+	(*ReportJobResultResponse)(nil), // 7: ironwork.v1.ReportJobResultResponse
+	(*timestamppb.Timestamp)(nil),   // 8: google.protobuf.Timestamp
+	(JobStatus)(0),                  // 9: ironwork.v1.JobStatus
 }
 var file_ironwork_v1_worker_proto_depIdxs = []int32{
-	6, // 0: ironwork.v1.HeartbeatRequest.sent_at:type_name -> google.protobuf.Timestamp
-	7, // 1: ironwork.v1.ReportJobResultRequest.status:type_name -> ironwork.v1.JobStatus
-	0, // 2: ironwork.v1.WorkerService.RegisterWorker:input_type -> ironwork.v1.RegisterWorkerRequest
-	2, // 3: ironwork.v1.WorkerService.Heartbeat:input_type -> ironwork.v1.HeartbeatRequest
-	4, // 4: ironwork.v1.WorkerService.ReportJobResult:input_type -> ironwork.v1.ReportJobResultRequest
-	1, // 5: ironwork.v1.WorkerService.RegisterWorker:output_type -> ironwork.v1.RegisterWorkerResponse
-	3, // 6: ironwork.v1.WorkerService.Heartbeat:output_type -> ironwork.v1.HeartbeatResponse
-	5, // 7: ironwork.v1.WorkerService.ReportJobResult:output_type -> ironwork.v1.ReportJobResultResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
+	8, // 0: ironwork.v1.HeartbeatRequest.sent_at:type_name -> google.protobuf.Timestamp
+	9, // 1: ironwork.v1.ReportJobResultRequest.status:type_name -> ironwork.v1.JobStatus
+	0, // 2: ironwork.v1.WorkerService.ExecuteJob:input_type -> ironwork.v1.ExecuteJobRequest
+	2, // 3: ironwork.v1.WorkerService.RegisterWorker:input_type -> ironwork.v1.RegisterWorkerRequest
+	4, // 4: ironwork.v1.WorkerService.Heartbeat:input_type -> ironwork.v1.HeartbeatRequest
+	6, // 5: ironwork.v1.WorkerService.ReportJobResult:input_type -> ironwork.v1.ReportJobResultRequest
+	1, // 6: ironwork.v1.WorkerService.ExecuteJob:output_type -> ironwork.v1.ExecuteJobResponse
+	3, // 7: ironwork.v1.WorkerService.RegisterWorker:output_type -> ironwork.v1.RegisterWorkerResponse
+	5, // 8: ironwork.v1.WorkerService.Heartbeat:output_type -> ironwork.v1.HeartbeatResponse
+	7, // 9: ironwork.v1.WorkerService.ReportJobResult:output_type -> ironwork.v1.ReportJobResultResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -417,7 +536,7 @@ func file_ironwork_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ironwork_v1_worker_proto_rawDesc), len(file_ironwork_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
