@@ -92,8 +92,12 @@ type Job struct {
 	Error            string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
 	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Set by the worker when the execution attempt starts / reaches a terminal
+	// state; unset until then.
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Job) Reset() {
@@ -185,6 +189,20 @@ func (x *Job) GetCreatedAt() *timestamppb.Timestamp {
 func (x *Job) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *Job) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *Job) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
 	}
 	return nil
 }
@@ -489,7 +507,7 @@ var File_ironwork_v1_job_proto protoreflect.FileDescriptor
 
 const file_ironwork_v1_job_proto_rawDesc = "" +
 	"\n" +
-	"\x15ironwork/v1/job.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc9\x02\n" +
+	"\x15ironwork/v1/job.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc1\x03\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -501,7 +519,12 @@ const file_ironwork_v1_job_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"@\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x129\n" +
+	"\n" +
+	"started_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
+	"\vfinished_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt\"@\n" +
 	"\x10SubmitJobRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\"7\n" +
@@ -562,21 +585,23 @@ var file_ironwork_v1_job_proto_depIdxs = []int32{
 	0,  // 0: ironwork.v1.Job.status:type_name -> ironwork.v1.JobStatus
 	8,  // 1: ironwork.v1.Job.created_at:type_name -> google.protobuf.Timestamp
 	8,  // 2: ironwork.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 3: ironwork.v1.SubmitJobResponse.job:type_name -> ironwork.v1.Job
-	1,  // 4: ironwork.v1.GetJobResponse.job:type_name -> ironwork.v1.Job
-	0,  // 5: ironwork.v1.ListJobsRequest.status_filter:type_name -> ironwork.v1.JobStatus
-	1,  // 6: ironwork.v1.ListJobsResponse.jobs:type_name -> ironwork.v1.Job
-	2,  // 7: ironwork.v1.JobService.SubmitJob:input_type -> ironwork.v1.SubmitJobRequest
-	4,  // 8: ironwork.v1.JobService.GetJob:input_type -> ironwork.v1.GetJobRequest
-	6,  // 9: ironwork.v1.JobService.ListJobs:input_type -> ironwork.v1.ListJobsRequest
-	3,  // 10: ironwork.v1.JobService.SubmitJob:output_type -> ironwork.v1.SubmitJobResponse
-	5,  // 11: ironwork.v1.JobService.GetJob:output_type -> ironwork.v1.GetJobResponse
-	7,  // 12: ironwork.v1.JobService.ListJobs:output_type -> ironwork.v1.ListJobsResponse
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	8,  // 3: ironwork.v1.Job.started_at:type_name -> google.protobuf.Timestamp
+	8,  // 4: ironwork.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
+	1,  // 5: ironwork.v1.SubmitJobResponse.job:type_name -> ironwork.v1.Job
+	1,  // 6: ironwork.v1.GetJobResponse.job:type_name -> ironwork.v1.Job
+	0,  // 7: ironwork.v1.ListJobsRequest.status_filter:type_name -> ironwork.v1.JobStatus
+	1,  // 8: ironwork.v1.ListJobsResponse.jobs:type_name -> ironwork.v1.Job
+	2,  // 9: ironwork.v1.JobService.SubmitJob:input_type -> ironwork.v1.SubmitJobRequest
+	4,  // 10: ironwork.v1.JobService.GetJob:input_type -> ironwork.v1.GetJobRequest
+	6,  // 11: ironwork.v1.JobService.ListJobs:input_type -> ironwork.v1.ListJobsRequest
+	3,  // 12: ironwork.v1.JobService.SubmitJob:output_type -> ironwork.v1.SubmitJobResponse
+	5,  // 13: ironwork.v1.JobService.GetJob:output_type -> ironwork.v1.GetJobResponse
+	7,  // 14: ironwork.v1.JobService.ListJobs:output_type -> ironwork.v1.ListJobsResponse
+	12, // [12:15] is the sub-list for method output_type
+	9,  // [9:12] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_ironwork_v1_job_proto_init() }

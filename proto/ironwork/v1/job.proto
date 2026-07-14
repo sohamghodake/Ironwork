@@ -33,6 +33,10 @@ message Job {
   string error = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
+  // Set by the worker when the execution attempt starts / reaches a terminal
+  // state; unset until then.
+  google.protobuf.Timestamp started_at = 10;
+  google.protobuf.Timestamp finished_at = 11;
 }
 
 message SubmitJobRequest {
