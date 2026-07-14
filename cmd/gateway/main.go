@@ -1,6 +1,7 @@
-// Command gateway is the REST edge of the cluster. Phase 0 exposes
-// GET /health, backed by the observer's ClusterCheck over mTLS gRPC, and
-// GET /healthz for its own liveness.
+// Command gateway is the REST edge of the cluster. Phase 1: the job API
+// (POST/GET /jobs) — jobs are persisted to Postgres and dispatched directly
+// to workers over mTLS gRPC (round-robin; the scheduler takes over placement
+// in Phase 2) — plus aggregated cluster health via the observer.
 package main
 
 import (
@@ -11,12 +12,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
 	"github.com/sohamghodake/ironwork/internal/app"
+	"github.com/sohamghodake/ironwork/internal/dispatch"
 	"github.com/sohamghodake/ironwork/internal/gatewayhttp"
+	"github.com/sohamghodake/ironwork/internal/store"
 	"github.com/sohamghodake/ironwork/internal/tlsutil"
 )
 
@@ -34,9 +38,26 @@ func main() {
 	}
 	defer func() { _ = conn.Close() }()
 
+	pool, err := pgxpool.New(context.Background(), cfg.DBDSN)
+	if err != nil {
+		log.Fatal().Err(err).Msg("create db pool")
+	}
+	defer pool.Close()
+
+	disp, err := dispatch.New(cfg.Workers, clientTLS, log)
+	if err != nil {
+		log.Fatal().Err(err).Msg("build dispatcher")
+	}
+	defer disp.Close()
+
 	srv := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           gatewayhttp.NewRouter(ironworkv1.NewHealthServiceClient(conn), log),
+		Addr: cfg.HTTPAddr,
+		Handler: gatewayhttp.NewRouter(gatewayhttp.Deps{
+			Health: ironworkv1.NewHealthServiceClient(conn),
+			Jobs:   store.New(pool),
+			Disp:   disp,
+			Log:    log,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -50,7 +71,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info().Str("addr", cfg.HTTPAddr).Msg("HTTP server listening")
+	log.Info().Str("addr", cfg.HTTPAddr).Int("workers", len(cfg.Workers)).Msg("HTTP server listening")
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("serve")
 	}
