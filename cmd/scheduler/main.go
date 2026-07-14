@@ -1,8 +1,8 @@
-// Command scheduler is the job-placement service. Phase 2: it serves
-// JobService — persisting submitted jobs and placing them on workers
-// (round-robin) — plus HealthService. Three instances run in compose for the
-// future Raft quorum shape; the gateway targets scheduler-1 until leader
-// election lands in Phase 3.
+// Command scheduler is the job-placement service. Phase 3: the three
+// instances form a Raft consensus group (mTLS transport on :9444). Only the
+// elected leader accepts SubmitJob and places jobs; followers reject fast and
+// the gateway reroutes. Placement decisions replicate through the Raft log,
+// and StateService exposes each node's consensus view.
 package main
 
 import (
@@ -16,6 +16,7 @@ import (
 	"github.com/sohamghodake/ironwork/internal/app"
 	"github.com/sohamghodake/ironwork/internal/dispatch"
 	"github.com/sohamghodake/ironwork/internal/healthsvc"
+	"github.com/sohamghodake/ironwork/internal/raftnode"
 	"github.com/sohamghodake/ironwork/internal/schedulersvc"
 	"github.com/sohamghodake/ironwork/internal/store"
 	"github.com/sohamghodake/ironwork/internal/tlsutil"
@@ -45,10 +46,26 @@ func main() {
 	}
 	defer disp.Close()
 
+	node, err := raftnode.New(raftnode.Config{
+		Instance: cfg.Instance,
+		BindAddr: cfg.RaftAddr,
+		Peers:    cfg.RaftPeers,
+		DataDir:  cfg.RaftDataDir,
+		TLS:      cfg.TLS,
+	}, log)
+	if err != nil {
+		log.Fatal().Err(err).Msg("start raft member")
+	}
+
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverTLS)))
-	ironworkv1.RegisterJobServiceServer(srv, schedulersvc.New(store.New(pool), disp, log))
+	ironworkv1.RegisterJobServiceServer(srv, schedulersvc.New(store.New(pool), disp, node, node, log))
+	ironworkv1.RegisterStateServiceServer(srv, schedulersvc.NewStateServer(cfg.Instance, node))
 	ironworkv1.RegisterHealthServiceServer(srv, healthsvc.New(cfg.Component, cfg.Instance))
 
-	log.Info().Int("workers", len(cfg.Workers)).Msg("scheduler starting")
+	log.Info().Int("workers", len(cfg.Workers)).Int("raft_peers", len(cfg.RaftPeers)).Msg("scheduler starting")
 	app.ServeGRPC(srv, cfg.GRPCAddr, log)
+
+	// gRPC has stopped accepting; hand leadership off before exiting so the
+	// survivors elect a replacement quickly on graceful shutdown.
+	node.Shutdown()
 }

@@ -19,6 +19,7 @@ import (
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
 	"github.com/sohamghodake/ironwork/internal/gatewayhttp"
+	"github.com/sohamghodake/ironwork/internal/leaderclient"
 )
 
 const testJobID = "3f6f2be8-7c1e-4b3a-9f10-6a4a1c2d3e4f"
@@ -175,6 +176,45 @@ func TestListJobs(t *testing.T) {
 
 	rec, _ = doJSON(t, h, http.MethodGet, "/jobs?limit=zap", "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// --- raft view ---
+
+type fakeRaft struct{ nodes []leaderclient.NodeStatus }
+
+func (f *fakeRaft) RaftStatus(context.Context) []leaderclient.NodeStatus { return f.nodes }
+
+func TestRaftEndpointReportsMajorityLeader(t *testing.T) {
+	h := gatewayhttp.NewRouter(gatewayhttp.Deps{
+		Health: &fakeHealthClient{}, Jobs: &fakeJobsClient{}, Log: zerolog.Nop(),
+		Raft: &fakeRaft{nodes: []leaderclient.NodeStatus{
+			{Name: "scheduler-1", Reachable: true, State: "Follower", LeaderID: "scheduler-2", Term: 5},
+			{Name: "scheduler-2", Reachable: true, State: "Leader", LeaderID: "scheduler-2", Term: 5},
+			{Name: "scheduler-3", Reachable: false, Error: "stopped"},
+		}},
+	})
+
+	rec, body := doJSON(t, h, http.MethodGet, "/raft", "")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "scheduler-2", body["leader"])
+	assert.Len(t, body["nodes"], 3)
+}
+
+func TestRaftEndpointNoMajorityDuringElection(t *testing.T) {
+	h := gatewayhttp.NewRouter(gatewayhttp.Deps{
+		Health: &fakeHealthClient{}, Jobs: &fakeJobsClient{}, Log: zerolog.Nop(),
+		Raft: &fakeRaft{nodes: []leaderclient.NodeStatus{
+			{Name: "scheduler-1", Reachable: true, State: "Candidate", LeaderID: ""},
+			{Name: "scheduler-2", Reachable: true, State: "Candidate", LeaderID: ""},
+			{Name: "scheduler-3", Reachable: false, Error: "stopped"},
+		}},
+	})
+
+	rec, body := doJSON(t, h, http.MethodGet, "/raft", "")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "", body["leader"])
 }
 
 // --- health ---
