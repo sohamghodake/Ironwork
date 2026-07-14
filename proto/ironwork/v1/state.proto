@@ -22,6 +22,29 @@ message ClusterState {
   repeated NodeInfo nodes = 2;
   JobCounts job_counts = 3;
   google.protobuf.Timestamp as_of = 4;
+  // Raft consensus view of the reporting node (schedulers only, Phase 3+).
+  RaftStatus raft = 5;
+}
+
+message RaftStatus {
+  // Raft role of the reporting node: Leader, Follower, or Candidate.
+  string state = 1;
+  // Instance name of the leader as this node sees it ("" during election).
+  string leader_id = 2;
+  uint64 term = 3;
+  uint64 last_log_index = 4;
+  // Index of the last log entry applied to this node's FSM; converging
+  // applied_index across nodes shows replication catching up.
+  uint64 applied_index = 5;
+  repeated string peers = 6;
+  // Placement decisions replicated through the Raft log (newest last).
+  repeated PlacementRecord recent_placements = 7;
+}
+
+message PlacementRecord {
+  string job_id = 1;
+  string worker = 2;
+  google.protobuf.Timestamp at = 3;
 }
 
 message NodeInfo {

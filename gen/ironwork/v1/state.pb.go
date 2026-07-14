@@ -109,6 +109,8 @@ type ClusterState struct {
 	Nodes         []*NodeInfo            `protobuf:"bytes,2,rep,name=nodes,proto3" json:"nodes,omitempty"`
 	JobCounts     *JobCounts             `protobuf:"bytes,3,opt,name=job_counts,json=jobCounts,proto3" json:"job_counts,omitempty"`
 	AsOf          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`
+	// Raft consensus view of the reporting node (schedulers only, Phase 3+).
+	Raft          *RaftStatus `protobuf:"bytes,5,opt,name=raft,proto3" json:"raft,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -171,6 +173,170 @@ func (x *ClusterState) GetAsOf() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ClusterState) GetRaft() *RaftStatus {
+	if x != nil {
+		return x.Raft
+	}
+	return nil
+}
+
+type RaftStatus struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Raft role of the reporting node: Leader, Follower, or Candidate.
+	State string `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	// Instance name of the leader as this node sees it ("" during election).
+	LeaderId     string `protobuf:"bytes,2,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
+	Term         uint64 `protobuf:"varint,3,opt,name=term,proto3" json:"term,omitempty"`
+	LastLogIndex uint64 `protobuf:"varint,4,opt,name=last_log_index,json=lastLogIndex,proto3" json:"last_log_index,omitempty"`
+	// Index of the last log entry applied to this node's FSM; converging
+	// applied_index across nodes shows replication catching up.
+	AppliedIndex uint64   `protobuf:"varint,5,opt,name=applied_index,json=appliedIndex,proto3" json:"applied_index,omitempty"`
+	Peers        []string `protobuf:"bytes,6,rep,name=peers,proto3" json:"peers,omitempty"`
+	// Placement decisions replicated through the Raft log (newest last).
+	RecentPlacements []*PlacementRecord `protobuf:"bytes,7,rep,name=recent_placements,json=recentPlacements,proto3" json:"recent_placements,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RaftStatus) Reset() {
+	*x = RaftStatus{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RaftStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaftStatus) ProtoMessage() {}
+
+func (x *RaftStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaftStatus.ProtoReflect.Descriptor instead.
+func (*RaftStatus) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RaftStatus) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *RaftStatus) GetLeaderId() string {
+	if x != nil {
+		return x.LeaderId
+	}
+	return ""
+}
+
+func (x *RaftStatus) GetTerm() uint64 {
+	if x != nil {
+		return x.Term
+	}
+	return 0
+}
+
+func (x *RaftStatus) GetLastLogIndex() uint64 {
+	if x != nil {
+		return x.LastLogIndex
+	}
+	return 0
+}
+
+func (x *RaftStatus) GetAppliedIndex() uint64 {
+	if x != nil {
+		return x.AppliedIndex
+	}
+	return 0
+}
+
+func (x *RaftStatus) GetPeers() []string {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
+func (x *RaftStatus) GetRecentPlacements() []*PlacementRecord {
+	if x != nil {
+		return x.RecentPlacements
+	}
+	return nil
+}
+
+type PlacementRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Worker        string                 `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	At            *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=at,proto3" json:"at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlacementRecord) Reset() {
+	*x = PlacementRecord{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlacementRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlacementRecord) ProtoMessage() {}
+
+func (x *PlacementRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlacementRecord.ProtoReflect.Descriptor instead.
+func (*PlacementRecord) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PlacementRecord) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *PlacementRecord) GetWorker() string {
+	if x != nil {
+		return x.Worker
+	}
+	return ""
+}
+
+func (x *PlacementRecord) GetAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.At
+	}
+	return nil
+}
+
 type NodeInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -183,7 +349,7 @@ type NodeInfo struct {
 
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -195,7 +361,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -208,7 +374,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NodeInfo) GetId() string {
@@ -245,7 +411,7 @@ type JobCounts struct {
 
 func (x *JobCounts) Reset() {
 	*x = JobCounts{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -257,7 +423,7 @@ func (x *JobCounts) String() string {
 func (*JobCounts) ProtoMessage() {}
 
 func (x *JobCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -270,7 +436,7 @@ func (x *JobCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobCounts.ProtoReflect.Descriptor instead.
 func (*JobCounts) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *JobCounts) GetPending() uint64 {
@@ -315,13 +481,27 @@ const file_ironwork_v1_state_proto_rawDesc = "" +
 	"\x17ironwork/v1/state.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x18\n" +
 	"\x16GetClusterStateRequest\"J\n" +
 	"\x17GetClusterStateResponse\x12/\n" +
-	"\x05state\x18\x01 \x01(\v2\x19.ironwork.v1.ClusterStateR\x05state\"\xca\x01\n" +
+	"\x05state\x18\x01 \x01(\v2\x19.ironwork.v1.ClusterStateR\x05state\"\xf7\x01\n" +
 	"\fClusterState\x12%\n" +
 	"\x0ereporting_node\x18\x01 \x01(\tR\rreportingNode\x12+\n" +
 	"\x05nodes\x18\x02 \x03(\v2\x15.ironwork.v1.NodeInfoR\x05nodes\x125\n" +
 	"\n" +
 	"job_counts\x18\x03 \x01(\v2\x16.ironwork.v1.JobCountsR\tjobCounts\x12/\n" +
-	"\x05as_of\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04asOf\"R\n" +
+	"\x05as_of\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04asOf\x12+\n" +
+	"\x04raft\x18\x05 \x01(\v2\x17.ironwork.v1.RaftStatusR\x04raft\"\xff\x01\n" +
+	"\n" +
+	"RaftStatus\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x1b\n" +
+	"\tleader_id\x18\x02 \x01(\tR\bleaderId\x12\x12\n" +
+	"\x04term\x18\x03 \x01(\x04R\x04term\x12$\n" +
+	"\x0elast_log_index\x18\x04 \x01(\x04R\flastLogIndex\x12#\n" +
+	"\rapplied_index\x18\x05 \x01(\x04R\fappliedIndex\x12\x14\n" +
+	"\x05peers\x18\x06 \x03(\tR\x05peers\x12I\n" +
+	"\x11recent_placements\x18\a \x03(\v2\x1c.ironwork.v1.PlacementRecordR\x10recentPlacements\"l\n" +
+	"\x0fPlacementRecord\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
+	"\x06worker\x18\x02 \x01(\tR\x06worker\x12*\n" +
+	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"R\n" +
 	"\bNodeInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tcomponent\x18\x02 \x01(\tR\tcomponent\x12\x18\n" +
@@ -349,27 +529,32 @@ func file_ironwork_v1_state_proto_rawDescGZIP() []byte {
 	return file_ironwork_v1_state_proto_rawDescData
 }
 
-var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_ironwork_v1_state_proto_goTypes = []any{
 	(*GetClusterStateRequest)(nil),  // 0: ironwork.v1.GetClusterStateRequest
 	(*GetClusterStateResponse)(nil), // 1: ironwork.v1.GetClusterStateResponse
 	(*ClusterState)(nil),            // 2: ironwork.v1.ClusterState
-	(*NodeInfo)(nil),                // 3: ironwork.v1.NodeInfo
-	(*JobCounts)(nil),               // 4: ironwork.v1.JobCounts
-	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
+	(*RaftStatus)(nil),              // 3: ironwork.v1.RaftStatus
+	(*PlacementRecord)(nil),         // 4: ironwork.v1.PlacementRecord
+	(*NodeInfo)(nil),                // 5: ironwork.v1.NodeInfo
+	(*JobCounts)(nil),               // 6: ironwork.v1.JobCounts
+	(*timestamppb.Timestamp)(nil),   // 7: google.protobuf.Timestamp
 }
 var file_ironwork_v1_state_proto_depIdxs = []int32{
 	2, // 0: ironwork.v1.GetClusterStateResponse.state:type_name -> ironwork.v1.ClusterState
-	3, // 1: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
-	4, // 2: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
-	5, // 3: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
-	0, // 4: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
-	1, // 5: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 1: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
+	6, // 2: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
+	7, // 3: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
+	3, // 4: ironwork.v1.ClusterState.raft:type_name -> ironwork.v1.RaftStatus
+	4, // 5: ironwork.v1.RaftStatus.recent_placements:type_name -> ironwork.v1.PlacementRecord
+	7, // 6: ironwork.v1.PlacementRecord.at:type_name -> google.protobuf.Timestamp
+	0, // 7: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
+	1, // 8: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
+	8, // [8:9] is the sub-list for method output_type
+	7, // [7:8] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_ironwork_v1_state_proto_init() }
@@ -383,7 +568,7 @@ func file_ironwork_v1_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ironwork_v1_state_proto_rawDesc), len(file_ironwork_v1_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
