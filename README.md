@@ -7,9 +7,10 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 0 complete** — the compose cluster boots, proto contracts
-> compile, migrations apply, and one health check passes end to end through
-> every service. No Raft, no CRDT yet; see the phase plan.
+> **Status: Phase 1 complete** — a job flows REST → gRPC → worker → Postgres:
+> the gateway persists it, dispatches directly to a worker (round-robin, no
+> scheduler in the middle yet), and the worker executes and writes every
+> status transition. No Raft, no CRDT yet; see the phase plan.
 
 ## Quickstart
 
@@ -44,6 +45,36 @@ Expected: HTTP 200 with every component `SERVING`:
 See the failure detection work: `docker compose stop worker-2` flips `/health`
 to 503 with the failing component and reason; `docker compose start worker-2`
 recovers it.
+
+## Job API (Phase 1)
+
+```sh
+# Submit: sleeps 3s on a worker, then succeeds
+curl -s -X POST localhost:8080/jobs \
+  -d '{"name":"demo","payload":{"duration_ms":3000}}'
+# → 201 {"id":"…","status":"scheduled","assigned_worker":"worker-1",…}
+
+# Watch it run: pending → scheduled → running → succeeded
+curl -s localhost:8080/jobs/<id>
+
+# List (filter: status=pending|scheduled|running|succeeded|failed)
+curl -s 'localhost:8080/jobs?status=running&limit=20'
+
+# Ask for a failure to see the error path
+curl -s -X POST localhost:8080/jobs -d '{"name":"doomed","payload":{"fail":true}}'
+```
+
+Payload contract (Phase 1 stub executor): `{"duration_ms": <0-60000>,
+"fail": <bool>}`; empty payload sleeps 1s and succeeds. The flow:
+
+```
+POST /jobs
+   └─ gateway: INSERT jobs row (pending)
+        └─ WorkerService.ExecuteJob        (mTLS gRPC, round-robin + failover)
+             └─ worker: UPDATE scheduled → ack
+                  └─ async: UPDATE running → sleep → UPDATE succeeded/failed
+GET /jobs/{id}  ← gateway reads the row back from Postgres
+```
 
 ## How the health check flows
 
@@ -92,7 +123,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 | Phase | Milestone | Visible proof |
 |-------|-----------|---------------|
 | **0 ✅** | Cluster boots; contracts compile; migrations apply | `/health` aggregates every component |
-| 1 | One job through REST → gRPC → worker → Postgres (no scheduler in the middle) | job status via API |
+| **1 ✅** | One job through REST → gRPC → worker → Postgres (no scheduler in the middle) | job status transitions via API |
 | 2 | Scheduler service in the placement path (single instance) | — |
 | 3 | **Raft across 3 schedulers** — election + failover (the hard milestone) | leader visibly re-elected on kill |
 | 4 | Worker backpressure + heartbeat crash detection & reassignment | on-screen reassignment |

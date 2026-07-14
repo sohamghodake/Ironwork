@@ -100,6 +100,11 @@ services:
     environment:
       <<: *tls-env
       IRONWORK_INSTANCE: worker-1
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_CAPACITY: "4"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   worker-2:
     <<: *service
@@ -107,8 +112,13 @@ services:
     environment:
       <<: *tls-env
       IRONWORK_INSTANCE: worker-2
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_CAPACITY: "4"
     depends_on:
-      - worker-1
+      worker-1:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   statemanager:
     <<: *service
@@ -146,10 +156,15 @@ services:
       <<: *tls-env
       IRONWORK_INSTANCE: gateway
       IRONWORK_OBSERVER_ADDR: observer:9443
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
     ports:
       - "8080:8080"
     depends_on:
-      - observer
+      observer:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz"]
       interval: 10s
