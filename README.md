@@ -7,10 +7,10 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 1 complete** — a job flows REST → gRPC → worker → Postgres:
-> the gateway persists it, dispatches directly to a worker (round-robin, no
-> scheduler in the middle yet), and the worker executes and writes every
-> status transition. No Raft, no CRDT yet; see the phase plan.
+> **Status: Phase 2 complete** — the scheduler is in the placement path. The
+> gateway is now a pure REST↔gRPC edge (no database, no placement); jobs go
+> gateway → scheduler-1 (JobService) → worker → Postgres. Single scheduler
+> instance places jobs; Raft election across all three is Phase 3.
 
 ## Quickstart
 
@@ -64,17 +64,22 @@ curl -s 'localhost:8080/jobs?status=running&limit=20'
 curl -s -X POST localhost:8080/jobs -d '{"name":"doomed","payload":{"fail":true}}'
 ```
 
-Payload contract (Phase 1 stub executor): `{"duration_ms": <0-60000>,
+Payload contract (stub executor): `{"duration_ms": <0-60000>,
 "fail": <bool>}`; empty payload sleeps 1s and succeeds. The flow:
 
 ```
 POST /jobs
-   └─ gateway: INSERT jobs row (pending)
-        └─ WorkerService.ExecuteJob        (mTLS gRPC, round-robin + failover)
-             └─ worker: UPDATE scheduled → ack
-                  └─ async: UPDATE running → sleep → UPDATE succeeded/failed
-GET /jobs/{id}  ← gateway reads the row back from Postgres
+   └─ gateway (pure edge, no DB)
+        └─ JobService.SubmitJob            (mTLS gRPC → scheduler-1)
+             └─ scheduler: INSERT jobs row (pending)
+                  └─ WorkerService.ExecuteJob   (round-robin + failover)
+                       └─ worker: UPDATE scheduled → ack
+                            └─ async: UPDATE running → sleep → succeeded/failed
+GET /jobs/{id}
+   └─ gateway → JobService.GetJob → scheduler reads Postgres
 ```
+
+Watch placement decisions land: `docker compose logs -f scheduler-1 | grep placed`.
 
 ## How the health check flows
 
@@ -124,7 +129,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 |-------|-----------|---------------|
 | **0 ✅** | Cluster boots; contracts compile; migrations apply | `/health` aggregates every component |
 | **1 ✅** | One job through REST → gRPC → worker → Postgres (no scheduler in the middle) | job status transitions via API |
-| 2 | Scheduler service in the placement path (single instance) | — |
+| **2 ✅** | Scheduler service in the placement path (single instance) | placement in scheduler-1 logs |
 | 3 | **Raft across 3 schedulers** — election + failover (the hard milestone) | leader visibly re-elected on kill |
 | 4 | Worker backpressure + heartbeat crash detection & reassignment | on-screen reassignment |
 | 5 | CRDT statemanager | divergence/reconvergence visualization |

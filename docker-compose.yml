@@ -63,6 +63,8 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Three schedulers form the future Raft quorum shape; Phase 2 placement is
+  # single-instance — the gateway targets scheduler-1.
   scheduler-1:
     <<: *service
     build:
@@ -72,6 +74,11 @@ services:
     environment:
       <<: *tls-env
       IRONWORK_INSTANCE: scheduler-1
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   scheduler-2:
     <<: *service
@@ -79,8 +86,13 @@ services:
     environment:
       <<: *tls-env
       IRONWORK_INSTANCE: scheduler-2
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
     depends_on:
-      - scheduler-1
+      scheduler-1:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   scheduler-3:
     <<: *service
@@ -88,8 +100,13 @@ services:
     environment:
       <<: *tls-env
       IRONWORK_INSTANCE: scheduler-3
+      IRONWORK_DB_DSN: *db-dsn
+      IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
     depends_on:
-      - scheduler-1
+      scheduler-1:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   worker-1:
     <<: *service
@@ -156,15 +173,14 @@ services:
       <<: *tls-env
       IRONWORK_INSTANCE: gateway
       IRONWORK_OBSERVER_ADDR: observer:9443
-      IRONWORK_DB_DSN: *db-dsn
-      IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
+      IRONWORK_SCHEDULER_ADDR: scheduler-1:9443
     ports:
       - "8080:8080"
     depends_on:
       observer:
         condition: service_started
-      migrate:
-        condition: service_completed_successfully
+      scheduler-1:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz"]
       interval: 10s
