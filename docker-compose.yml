@@ -63,8 +63,9 @@ services:
         condition: service_healthy
     restart: "no"
 
-  # Three schedulers form the future Raft quorum shape; Phase 2 placement is
-  # single-instance — the gateway targets scheduler-1.
+  # The three schedulers form a Raft consensus group (mTLS transport on
+  # :9444, durable state per instance). Only the elected leader places jobs;
+  # the gateway discovers it by walking the set.
   scheduler-1:
     <<: *service
     build:
@@ -76,6 +77,12 @@ services:
       IRONWORK_INSTANCE: scheduler-1
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
+      IRONWORK_RAFT_ADDR: ":9444"
+      IRONWORK_RAFT_PEERS: scheduler-1=scheduler-1:9444,scheduler-2=scheduler-2:9444,scheduler-3=scheduler-3:9444
+      IRONWORK_RAFT_DATA_DIR: /raft
+    volumes:
+      - ./certs:/certs:ro
+      - raft-data-1:/raft
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -88,6 +95,12 @@ services:
       IRONWORK_INSTANCE: scheduler-2
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
+      IRONWORK_RAFT_ADDR: ":9444"
+      IRONWORK_RAFT_PEERS: scheduler-1=scheduler-1:9444,scheduler-2=scheduler-2:9444,scheduler-3=scheduler-3:9444
+      IRONWORK_RAFT_DATA_DIR: /raft
+    volumes:
+      - ./certs:/certs:ro
+      - raft-data-2:/raft
     depends_on:
       scheduler-1:
         condition: service_started
@@ -102,6 +115,12 @@ services:
       IRONWORK_INSTANCE: scheduler-3
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_WORKERS: worker-1=worker-1:9443,worker-2=worker-2:9443
+      IRONWORK_RAFT_ADDR: ":9444"
+      IRONWORK_RAFT_PEERS: scheduler-1=scheduler-1:9444,scheduler-2=scheduler-2:9444,scheduler-3=scheduler-3:9444
+      IRONWORK_RAFT_DATA_DIR: /raft
+    volumes:
+      - ./certs:/certs:ro
+      - raft-data-3:/raft
     depends_on:
       scheduler-1:
         condition: service_started
@@ -173,7 +192,7 @@ services:
       <<: *tls-env
       IRONWORK_INSTANCE: gateway
       IRONWORK_OBSERVER_ADDR: observer:9443
-      IRONWORK_SCHEDULER_ADDR: scheduler-1:9443
+      IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
     ports:
       - "8080:8080"
     depends_on:
@@ -190,3 +209,6 @@ services:
 volumes:
   pg-primary-data:
   pg-replica-data:
+  raft-data-1:
+  raft-data-2:
+  raft-data-3:
