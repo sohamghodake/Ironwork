@@ -1,12 +1,12 @@
-// Package gatewayhttp serves the gateway's REST API: the job API (create,
-// get, list — Phase 1) and cluster health (backed by the observer's
-// ClusterCheck over mTLS gRPC) plus a local liveness probe.
+// Package gatewayhttp serves the gateway's REST API. Phase 2: the gateway is
+// a pure edge — no database, no placement. The job API translates REST to the
+// scheduler's JobService over mTLS gRPC; cluster health is backed by the
+// observer's ClusterCheck. The REST contract is unchanged from Phase 1.
 package gatewayhttp
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,8 +14,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
+	"github.com/sohamghodake/ironwork/internal/protoconv"
 	"github.com/sohamghodake/ironwork/internal/store"
 )
 
@@ -23,44 +26,61 @@ import (
 // per-target timeout is shorter, so a healthy observer always answers in time.
 const clusterCheckTimeout = 10 * time.Second
 
+// submitTimeout bounds POST /jobs: the scheduler may walk every worker with
+// its own per-attempt timeout before answering.
+const submitTimeout = 15 * time.Second
+
+const readTimeout = 5 * time.Second
+
 const (
-	maxBodyBytes  = 1 << 20
-	maxNameLength = 200
-	defaultLimit  = 50
-	maxLimit      = 200
+	maxBodyBytes = 1 << 20
+	defaultLimit = 50
+	maxLimit     = 200
 )
-
-// JobStore is the slice of store.Store the gateway needs.
-type JobStore interface {
-	CreateJob(ctx context.Context, name string, payload []byte) (*store.Job, error)
-	GetJob(ctx context.Context, id string) (*store.Job, error)
-	ListJobs(ctx context.Context, status string, limit int) ([]*store.Job, error)
-	MarkFinished(ctx context.Context, id string, succeeded bool, errMsg string) error
-}
-
-// JobDispatcher places an accepted job on a worker (Phase 1: round-robin).
-type JobDispatcher interface {
-	Dispatch(ctx context.Context, job *store.Job) (workerInstance string, err error)
-}
 
 // Deps wires the router's collaborators.
 type Deps struct {
 	Health ironworkv1.HealthServiceClient
-	Jobs   JobStore
-	Disp   JobDispatcher
+	Jobs   ironworkv1.JobServiceClient
 	Log    zerolog.Logger
 }
 
-// jobJSON renders a store.Job with its payload inlined when it is valid JSON.
+// jobJSON is the REST rendering of a job — same shape since Phase 1.
 type jobJSON struct {
-	*store.Job
-	Payload json.RawMessage `json:"payload,omitempty"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Status         string          `json:"status"`
+	AssignedWorker string          `json:"assigned_worker,omitempty"`
+	Attempts       uint32          `json:"attempts"`
+	Error          string          `json:"error,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	StartedAt      *time.Time      `json:"started_at,omitempty"`
+	FinishedAt     *time.Time      `json:"finished_at,omitempty"`
+	Payload        json.RawMessage `json:"payload,omitempty"`
 }
 
-func renderJob(j *store.Job) jobJSON {
-	out := jobJSON{Job: j}
+func renderJob(j *ironworkv1.Job) jobJSON {
+	out := jobJSON{
+		ID:             j.Id,
+		Name:           j.Name,
+		Status:         protoconv.StatusFromProto(j.Status),
+		AssignedWorker: j.AssignedWorkerId,
+		Attempts:       j.Attempts,
+		Error:          j.Error,
+		CreatedAt:      j.CreatedAt.AsTime(),
+		UpdatedAt:      j.UpdatedAt.AsTime(),
+	}
+	if j.StartedAt != nil {
+		t := j.StartedAt.AsTime()
+		out.StartedAt = &t
+	}
+	if j.FinishedAt != nil {
+		t := j.FinishedAt.AsTime()
+		out.FinishedAt = &t
+	}
 	if json.Valid(j.Payload) {
-		out.Payload = json.RawMessage(j.Payload)
+		out.Payload = j.Payload
 	}
 	return out
 }
@@ -91,9 +111,20 @@ func NewRouter(d Deps) http.Handler {
 	return r
 }
 
-// handleCreateJob persists a job and dispatches it to a worker. The job
-// resource is created either way (201); a failed dispatch surfaces as the job
-// in status "failed" with the dispatch error recorded.
+// writeRPCError maps a JobService error onto the REST surface.
+func (d Deps) writeRPCError(w http.ResponseWriter, err error) {
+	st := status.Convert(err)
+	switch st.Code() {
+	case codes.InvalidArgument:
+		writeError(w, http.StatusBadRequest, st.Message())
+	case codes.NotFound:
+		writeError(w, http.StatusNotFound, st.Message())
+	default:
+		d.Log.Error().Err(err).Msg("scheduler call failed")
+		writeError(w, http.StatusBadGateway, "scheduler unavailable: "+st.Message())
+	}
+}
+
 func (d Deps) handleCreateJob(w http.ResponseWriter, req *http.Request) {
 	var body struct {
 		Name    string          `json:"name"`
@@ -104,33 +135,21 @@ func (d Deps) handleCreateJob(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 		return
 	}
-	if body.Name == "" || len(body.Name) > maxNameLength {
-		writeError(w, http.StatusBadRequest, "name is required (max 200 chars)")
-		return
-	}
 
-	ctx := req.Context()
-	job, err := d.Jobs.CreateJob(ctx, body.Name, body.Payload)
+	ctx, cancel := context.WithTimeout(req.Context(), submitTimeout)
+	defer cancel()
+
+	resp, err := d.Jobs.SubmitJob(ctx, &ironworkv1.SubmitJobRequest{
+		Name:    body.Name,
+		Payload: body.Payload,
+	})
 	if err != nil {
-		d.Log.Error().Err(err).Msg("create job")
-		writeError(w, http.StatusInternalServerError, "create job")
+		d.writeRPCError(w, err)
 		return
 	}
 
-	if _, err := d.Disp.Dispatch(ctx, job); err != nil {
-		d.Log.Warn().Err(err).Str("job_id", job.ID).Msg("dispatch failed")
-		if merr := d.Jobs.MarkFinished(ctx, job.ID, false, err.Error()); merr != nil {
-			d.Log.Error().Err(merr).Str("job_id", job.ID).Msg("mark dispatch failure")
-		}
-	}
-
-	// Re-read: the accepting worker has already recorded at least "scheduled".
-	if fresh, err := d.Jobs.GetJob(ctx, job.ID); err == nil {
-		job = fresh
-	}
-
-	w.Header().Set("Location", "/jobs/"+job.ID)
-	writeJSON(w, http.StatusCreated, renderJob(job))
+	w.Header().Set("Location", "/jobs/"+resp.Job.Id)
+	writeJSON(w, http.StatusCreated, renderJob(resp.Job))
 }
 
 func (d Deps) handleGetJob(w http.ResponseWriter, req *http.Request) {
@@ -140,22 +159,20 @@ func (d Deps) handleGetJob(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	job, err := d.Jobs.GetJob(req.Context(), id)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "job not found")
-		return
-	}
+	ctx, cancel := context.WithTimeout(req.Context(), readTimeout)
+	defer cancel()
+
+	resp, err := d.Jobs.GetJob(ctx, &ironworkv1.GetJobRequest{Id: id})
 	if err != nil {
-		d.Log.Error().Err(err).Str("job_id", id).Msg("get job")
-		writeError(w, http.StatusInternalServerError, "get job")
+		d.writeRPCError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, renderJob(job))
+	writeJSON(w, http.StatusOK, renderJob(resp.Job))
 }
 
 func (d Deps) handleListJobs(w http.ResponseWriter, req *http.Request) {
-	status := req.URL.Query().Get("status")
-	if status != "" && !validStatuses[status] {
+	filter := req.URL.Query().Get("status")
+	if filter != "" && !validStatuses[filter] {
 		writeError(w, http.StatusBadRequest, "unknown status filter")
 		return
 	}
@@ -173,15 +190,20 @@ func (d Deps) handleListJobs(w http.ResponseWriter, req *http.Request) {
 		limit = defaultLimit
 	}
 
-	jobs, err := d.Jobs.ListJobs(req.Context(), status, limit)
+	ctx, cancel := context.WithTimeout(req.Context(), readTimeout)
+	defer cancel()
+
+	resp, err := d.Jobs.ListJobs(ctx, &ironworkv1.ListJobsRequest{
+		StatusFilter: protoconv.StatusToProto(filter),
+		PageSize:     uint32(limit), //nolint:gosec // limit is bounded above
+	})
 	if err != nil {
-		d.Log.Error().Err(err).Msg("list jobs")
-		writeError(w, http.StatusInternalServerError, "list jobs")
+		d.writeRPCError(w, err)
 		return
 	}
 
-	rendered := make([]jobJSON, 0, len(jobs))
-	for _, j := range jobs {
+	rendered := make([]jobJSON, 0, len(resp.Jobs))
+	for _, j := range resp.Jobs {
 		rendered = append(rendered, renderJob(j))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": rendered})

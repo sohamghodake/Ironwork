@@ -24,6 +24,9 @@ type Config struct {
 	DBDSN string
 	// ObserverAddr is the observer's gRPC address (gateway).
 	ObserverAddr string
+	// SchedulerAddr is the placement scheduler's gRPC address (gateway).
+	// Phase 2 targets one instance; Phase 3 replaces this with leader routing.
+	SchedulerAddr string
 	// Targets maps instance name -> gRPC address for observer fan-out checks,
 	// parsed from "name=addr,name=addr" form.
 	Targets map[string]string
@@ -57,6 +60,7 @@ func Load(component string) (*Config, error) {
 	// Host port 5433 matches the compose mapping for postgres-primary.
 	v.SetDefault("db_dsn", "postgres://ironwork:ironwork@localhost:5433/ironwork?sslmode=disable")
 	v.SetDefault("observer_addr", "observer:9443")
+	v.SetDefault("scheduler_addr", "scheduler-1:9443")
 	v.SetDefault("targets", "")
 	v.SetDefault("workers", "")
 	v.SetDefault("capacity", 4)
@@ -75,16 +79,17 @@ func Load(component string) (*Config, error) {
 	}
 
 	return &Config{
-		Component:    component,
-		Instance:     v.GetString("instance"),
-		HTTPAddr:     v.GetString("http_addr"),
-		GRPCAddr:     v.GetString("grpc_addr"),
-		DBDSN:        v.GetString("db_dsn"),
-		ObserverAddr: v.GetString("observer_addr"),
-		Targets:      targets,
-		Workers:      workers,
-		Capacity:     v.GetInt("capacity"),
-		LogLevel:     v.GetString("log_level"),
+		Component:     component,
+		Instance:      v.GetString("instance"),
+		HTTPAddr:      v.GetString("http_addr"),
+		GRPCAddr:      v.GetString("grpc_addr"),
+		DBDSN:         v.GetString("db_dsn"),
+		ObserverAddr:  v.GetString("observer_addr"),
+		SchedulerAddr: v.GetString("scheduler_addr"),
+		Targets:       targets,
+		Workers:       workers,
+		Capacity:      v.GetInt("capacity"),
+		LogLevel:      v.GetString("log_level"),
 		TLS: TLSPaths{
 			CertFile: v.GetString("tls.cert_file"),
 			KeyFile:  v.GetString("tls.key_file"),
