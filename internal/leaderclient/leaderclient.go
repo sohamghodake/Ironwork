@@ -68,6 +68,9 @@ func New(schedulers map[string]string, tlsCfg *tls.Config, log zerolog.Logger) (
 			r.Close()
 			return nil, fmt.Errorf("leaderclient: client for %s: %w", name, err)
 		}
+		// Dial eagerly so the first request after boot doesn't race the
+		// connection handshake.
+		conn.Connect()
 		r.members = append(r.members, member{
 			name:   name,
 			jobs:   ironworkv1.NewJobServiceClient(conn),
