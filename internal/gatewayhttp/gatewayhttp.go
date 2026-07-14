@@ -119,7 +119,7 @@ func (d Deps) handleCreateJob(w http.ResponseWriter, req *http.Request) {
 
 	if _, err := d.Disp.Dispatch(ctx, job); err != nil {
 		d.Log.Warn().Err(err).Str("job_id", job.ID).Msg("dispatch failed")
-		if merr := d.Jobs.MarkFinished(ctx, job.ID, false, "dispatch: "+err.Error()); merr != nil {
+		if merr := d.Jobs.MarkFinished(ctx, job.ID, false, err.Error()); merr != nil {
 			d.Log.Error().Err(merr).Str("job_id", job.ID).Msg("mark dispatch failure")
 		}
 	}
