@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
+	"github.com/sohamghodake/ironwork/internal/leaderclient"
 	"github.com/sohamghodake/ironwork/internal/protoconv"
 	"github.com/sohamghodake/ironwork/internal/store"
 )
@@ -38,10 +39,16 @@ const (
 	maxLimit     = 200
 )
 
+// RaftStatusProvider aggregates every scheduler's consensus view.
+type RaftStatusProvider interface {
+	RaftStatus(ctx context.Context) []leaderclient.NodeStatus
+}
+
 // Deps wires the router's collaborators.
 type Deps struct {
 	Health ironworkv1.HealthServiceClient
 	Jobs   ironworkv1.JobServiceClient
+	Raft   RaftStatusProvider
 	Log    zerolog.Logger
 }
 
@@ -101,6 +108,7 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	r.Get("/health", d.handleHealth)
+	r.Get("/raft", d.handleRaft)
 
 	r.Route("/jobs", func(r chi.Router) {
 		r.Post("/", d.handleCreateJob)
@@ -207,6 +215,31 @@ func (d Deps) handleListJobs(w http.ResponseWriter, req *http.Request) {
 		rendered = append(rendered, renderJob(j))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": rendered})
+}
+
+// handleRaft reports every scheduler's consensus view side by side — the
+// live window into leader election and log replication. "leader" is the
+// leader_id a majority of nodes agree on ("" mid-election).
+func (d Deps) handleRaft(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), clusterCheckTimeout)
+	defer cancel()
+
+	nodes := d.Raft.RaftStatus(ctx)
+
+	votes := map[string]int{}
+	for _, n := range nodes {
+		if n.Reachable && n.LeaderID != "" {
+			votes[n.LeaderID]++
+		}
+	}
+	leader := ""
+	for id, count := range votes {
+		if count > len(nodes)/2 {
+			leader = id
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"leader": leader, "nodes": nodes})
 }
 
 // healthResponse is the JSON shape of GET /health.

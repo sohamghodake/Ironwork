@@ -38,23 +38,41 @@ type JobDispatcher interface {
 	Dispatch(ctx context.Context, job *store.Job) (workerInstance string, err error)
 }
 
+// Leadership reports this scheduler's role in the Raft consensus group.
+type Leadership interface {
+	IsLeader() bool
+	LeaderID() string
+}
+
+// PlacementLog replicates placement decisions to the consensus group.
+type PlacementLog interface {
+	ApplyPlacement(jobID, worker string) error
+}
+
 // Server implements JobService for the scheduler.
 type Server struct {
 	ironworkv1.UnimplementedJobServiceServer
 
 	store JobStore
 	disp  JobDispatcher
+	lead  Leadership
+	plog  PlacementLog
 	log   zerolog.Logger
 }
 
 // New builds the scheduler's job service.
-func New(st JobStore, disp JobDispatcher, log zerolog.Logger) *Server {
-	return &Server{store: st, disp: disp, log: log}
+func New(st JobStore, disp JobDispatcher, lead Leadership, plog PlacementLog, log zerolog.Logger) *Server {
+	return &Server{store: st, disp: disp, lead: lead, plog: plog, log: log}
 }
 
-// SubmitJob persists the job and places it. The job resource is created even
-// when placement fails — the failure is recorded on the job itself.
+// SubmitJob persists the job and places it. Only the Raft leader accepts
+// submissions; followers reject fast so the gateway can route onward. The job
+// resource is created even when placement fails — the failure is recorded on
+// the job itself.
 func (s *Server) SubmitJob(ctx context.Context, req *ironworkv1.SubmitJobRequest) (*ironworkv1.SubmitJobResponse, error) {
+	if !s.lead.IsLeader() {
+		return nil, status.Errorf(codes.FailedPrecondition, "not leader (leader: %s)", s.lead.LeaderID())
+	}
 	if req.Name == "" || len(req.Name) > maxNameLength {
 		return nil, status.Error(codes.InvalidArgument, "name is required (max 200 chars)")
 	}
@@ -72,6 +90,12 @@ func (s *Server) SubmitJob(ctx context.Context, req *ironworkv1.SubmitJobRequest
 		}
 	} else {
 		s.log.Info().Str("job_id", job.ID).Str("worker", worker).Msg("job placed")
+		// Replicate the decision through the Raft log. The job is already
+		// placed — this is the authority trail, not the placement mechanism —
+		// so a failed apply (e.g. leadership lost mid-flight) only warns.
+		if aerr := s.plog.ApplyPlacement(job.ID, worker); aerr != nil {
+			s.log.Warn().Err(aerr).Str("job_id", job.ID).Msg("placement log apply failed")
+		}
 	}
 
 	// Re-read: the accepting worker has already recorded at least "scheduled".

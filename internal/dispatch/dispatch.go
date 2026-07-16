@@ -63,6 +63,9 @@ func New(workers map[string]string, tlsCfg *tls.Config, log zerolog.Logger) (*Di
 			d.Close()
 			return nil, fmt.Errorf("dispatch: client for %s: %w", name, err)
 		}
+		// Dial eagerly: otherwise the first dispatch after boot races the
+		// connection handshake and can burn its whole attempt timeout.
+		conn.Connect()
 		d.workers = append(d.workers, worker{
 			name:   name,
 			client: ironworkv1.NewWorkerServiceClient(conn),

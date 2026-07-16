@@ -24,9 +24,16 @@ type Config struct {
 	DBDSN string
 	// ObserverAddr is the observer's gRPC address (gateway).
 	ObserverAddr string
-	// SchedulerAddr is the placement scheduler's gRPC address (gateway).
-	// Phase 2 targets one instance; Phase 3 replaces this with leader routing.
-	SchedulerAddr string
+	// Schedulers maps instance name -> gRPC address of every scheduler; the
+	// gateway routes job traffic to whichever one leads the Raft group.
+	Schedulers map[string]string
+	// RaftAddr is the raft transport bind address (scheduler).
+	RaftAddr string
+	// RaftPeers maps instance name -> advertised raft address for every
+	// consensus member, including this one (scheduler).
+	RaftPeers map[string]string
+	// RaftDataDir holds the raft log, stable store, and snapshots (scheduler).
+	RaftDataDir string
 	// Targets maps instance name -> gRPC address for observer fan-out checks,
 	// parsed from "name=addr,name=addr" form.
 	Targets map[string]string
@@ -60,7 +67,10 @@ func Load(component string) (*Config, error) {
 	// Host port 5433 matches the compose mapping for postgres-primary.
 	v.SetDefault("db_dsn", "postgres://ironwork:ironwork@localhost:5433/ironwork?sslmode=disable")
 	v.SetDefault("observer_addr", "observer:9443")
-	v.SetDefault("scheduler_addr", "scheduler-1:9443")
+	v.SetDefault("schedulers", "scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443")
+	v.SetDefault("raft_addr", ":9444")
+	v.SetDefault("raft_peers", "scheduler-1=scheduler-1:9444,scheduler-2=scheduler-2:9444,scheduler-3=scheduler-3:9444")
+	v.SetDefault("raft_data_dir", "raft-data")
 	v.SetDefault("targets", "")
 	v.SetDefault("workers", "")
 	v.SetDefault("capacity", 4)
@@ -77,19 +87,30 @@ func Load(component string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: invalid IRONWORK_WORKERS: %w", err)
 	}
+	schedulers, err := parseTargets(v.GetString("schedulers"))
+	if err != nil {
+		return nil, fmt.Errorf("config: invalid IRONWORK_SCHEDULERS: %w", err)
+	}
+	raftPeers, err := parseTargets(v.GetString("raft_peers"))
+	if err != nil {
+		return nil, fmt.Errorf("config: invalid IRONWORK_RAFT_PEERS: %w", err)
+	}
 
 	return &Config{
-		Component:     component,
-		Instance:      v.GetString("instance"),
-		HTTPAddr:      v.GetString("http_addr"),
-		GRPCAddr:      v.GetString("grpc_addr"),
-		DBDSN:         v.GetString("db_dsn"),
-		ObserverAddr:  v.GetString("observer_addr"),
-		SchedulerAddr: v.GetString("scheduler_addr"),
-		Targets:       targets,
-		Workers:       workers,
-		Capacity:      v.GetInt("capacity"),
-		LogLevel:      v.GetString("log_level"),
+		Component:    component,
+		Instance:     v.GetString("instance"),
+		HTTPAddr:     v.GetString("http_addr"),
+		GRPCAddr:     v.GetString("grpc_addr"),
+		DBDSN:        v.GetString("db_dsn"),
+		ObserverAddr: v.GetString("observer_addr"),
+		Schedulers:   schedulers,
+		RaftAddr:     v.GetString("raft_addr"),
+		RaftPeers:    raftPeers,
+		RaftDataDir:  v.GetString("raft_data_dir"),
+		Targets:      targets,
+		Workers:      workers,
+		Capacity:     v.GetInt("capacity"),
+		LogLevel:     v.GetString("log_level"),
 		TLS: TLSPaths{
 			CertFile: v.GetString("tls.cert_file"),
 			KeyFile:  v.GetString("tls.key_file"),

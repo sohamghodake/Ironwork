@@ -13,3 +13,7 @@
 
 # Test artifacts
 coverage.out
+
+# Raft state from runs outside compose
+/raft-data/
+

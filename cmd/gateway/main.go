@@ -1,7 +1,7 @@
-// Command gateway is the REST edge of the cluster. Phase 2: a pure edge — no
-// database, no placement. POST/GET /jobs translate to the scheduler's
-// JobService over mTLS gRPC (scheduler-1 until Raft leader routing in
-// Phase 3); /health aggregates via the observer.
+// Command gateway is the REST edge of the cluster. Phase 3: job traffic
+// routes to whichever scheduler leads the Raft group (followers reject,
+// the router walks the set and caches the leader); GET /raft exposes every
+// scheduler's consensus view; /health aggregates via the observer.
 package main
 
 import (
@@ -18,6 +18,7 @@ import (
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
 	"github.com/sohamghodake/ironwork/internal/app"
 	"github.com/sohamghodake/ironwork/internal/gatewayhttp"
+	"github.com/sohamghodake/ironwork/internal/leaderclient"
 	"github.com/sohamghodake/ironwork/internal/tlsutil"
 )
 
@@ -36,17 +37,18 @@ func main() {
 	}
 	defer func() { _ = obsConn.Close() }()
 
-	schedConn, err := grpc.NewClient(cfg.SchedulerAddr, creds)
+	router, err := leaderclient.New(cfg.Schedulers, clientTLS, log)
 	if err != nil {
-		log.Fatal().Err(err).Str("addr", cfg.SchedulerAddr).Msg("create scheduler client")
+		log.Fatal().Err(err).Msg("create scheduler router")
 	}
-	defer func() { _ = schedConn.Close() }()
+	defer router.Close()
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: gatewayhttp.NewRouter(gatewayhttp.Deps{
 			Health: ironworkv1.NewHealthServiceClient(obsConn),
-			Jobs:   ironworkv1.NewJobServiceClient(schedConn),
+			Jobs:   router,
+			Raft:   router,
 			Log:    log,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -62,7 +64,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info().Str("addr", cfg.HTTPAddr).Str("scheduler", cfg.SchedulerAddr).Msg("HTTP server listening")
+	log.Info().Str("addr", cfg.HTTPAddr).Int("schedulers", len(cfg.Schedulers)).Msg("HTTP server listening")
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("serve")
 	}

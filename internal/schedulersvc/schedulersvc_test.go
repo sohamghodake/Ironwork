@@ -84,9 +84,31 @@ func (f *fakeDispatcher) Dispatch(_ context.Context, job *store.Job) (string, er
 	return "worker-1", nil
 }
 
+type fakeLeadership struct {
+	leader bool
+	id     string
+}
+
+func (f fakeLeadership) IsLeader() bool   { return f.leader }
+func (f fakeLeadership) LeaderID() string { return f.id }
+
+type fakePlacementLog struct {
+	applied []string
+	err     error
+}
+
+func (f *fakePlacementLog) ApplyPlacement(jobID, worker string) error {
+	f.applied = append(f.applied, jobID+"@"+worker)
+	return f.err
+}
+
+func newLeaderSvc(st *fakeStore, disp *fakeDispatcher, plog *fakePlacementLog) *schedulersvc.Server {
+	return schedulersvc.New(st, disp, fakeLeadership{leader: true, id: "scheduler-1"}, plog, zerolog.Nop())
+}
+
 func TestSubmitJobPlaces(t *testing.T) {
 	st := newFakeStore()
-	svc := schedulersvc.New(st, &fakeDispatcher{st: st}, zerolog.Nop())
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
 
 	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{
 		Name: "sleep", Payload: []byte(`{"duration_ms":100}`),
@@ -101,7 +123,7 @@ func TestSubmitJobPlaces(t *testing.T) {
 
 func TestSubmitJobPlacementFailureMarksFailed(t *testing.T) {
 	st := newFakeStore()
-	svc := schedulersvc.New(st, &fakeDispatcher{st: st, err: errors.New("all workers down")}, zerolog.Nop())
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("all workers down")}, &fakePlacementLog{})
 
 	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
@@ -111,7 +133,7 @@ func TestSubmitJobPlacementFailureMarksFailed(t *testing.T) {
 }
 
 func TestSubmitJobValidatesName(t *testing.T) {
-	svc := schedulersvc.New(newFakeStore(), &fakeDispatcher{}, zerolog.Nop())
+	svc := newLeaderSvc(newFakeStore(), &fakeDispatcher{}, &fakePlacementLog{})
 
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -119,7 +141,7 @@ func TestSubmitJobValidatesName(t *testing.T) {
 
 func TestGetJob(t *testing.T) {
 	st := newFakeStore()
-	svc := schedulersvc.New(st, &fakeDispatcher{st: st}, zerolog.Nop())
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
 
@@ -134,9 +156,52 @@ func TestGetJob(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestSubmitJobFollowerRejectsFast(t *testing.T) {
+	st := newFakeStore()
+	svc := schedulersvc.New(st, &fakeDispatcher{st: st},
+		fakeLeadership{leader: false, id: "scheduler-2"}, &fakePlacementLog{}, zerolog.Nop())
+
+	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "scheduler-2")
+	assert.Empty(t, st.jobs, "followers must not persist jobs")
+}
+
+func TestSubmitJobReplicatesPlacement(t *testing.T) {
+	st := newFakeStore()
+	plog := &fakePlacementLog{}
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, plog)
+
+	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{testJobID + "@worker-1"}, plog.applied)
+}
+
+func TestSubmitJobApplyFailureDoesNotFailSubmit(t *testing.T) {
+	st := newFakeStore()
+	plog := &fakePlacementLog{err: errors.New("leadership lost")}
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, plog)
+
+	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+	require.NoError(t, err)
+	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_SCHEDULED, resp.Job.Status)
+}
+
+func TestSubmitJobNoPlacementLogOnDispatchFailure(t *testing.T) {
+	st := newFakeStore()
+	plog := &fakePlacementLog{}
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("workers down")}, plog)
+
+	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+	require.NoError(t, err)
+	assert.Empty(t, plog.applied, "failed placements must not enter the log")
+}
+
 func TestListJobsFilters(t *testing.T) {
 	st := newFakeStore()
-	svc := schedulersvc.New(st, &fakeDispatcher{st: st}, zerolog.Nop())
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
 
