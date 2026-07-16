@@ -7,10 +7,11 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 2 complete** — the scheduler is in the placement path. The
-> gateway is now a pure REST↔gRPC edge (no database, no placement); jobs go
-> gateway → scheduler-1 (JobService) → worker → Postgres. Single scheduler
-> instance places jobs; Raft election across all three is Phase 3.
+> **Status: Phase 3 complete — the hard milestone.** The three schedulers form
+> a Raft consensus group: only the elected leader places jobs, placement
+> decisions replicate through the Raft log to every node, and killing the
+> leader produces a visible re-election (~2s) while the job API stays up.
+> `GET /raft` shows each node's consensus view live.
 
 ## Quickstart
 
@@ -70,16 +71,48 @@ Payload contract (stub executor): `{"duration_ms": <0-60000>,
 ```
 POST /jobs
    └─ gateway (pure edge, no DB)
-        └─ JobService.SubmitJob            (mTLS gRPC → scheduler-1)
-             └─ scheduler: INSERT jobs row (pending)
-                  └─ WorkerService.ExecuteJob   (round-robin + failover)
-                       └─ worker: UPDATE scheduled → ack
-                            └─ async: UPDATE running → sleep → succeeded/failed
+        └─ JobService.SubmitJob        (mTLS gRPC → whichever scheduler LEADS)
+             │    followers reject FailedPrecondition; the gateway walks the
+             │    set leader-first and caches whoever accepts
+             └─ leader: INSERT jobs row (pending)
+                  ├─ WorkerService.ExecuteJob   (round-robin + failover)
+                  │    └─ worker: UPDATE scheduled → ack
+                  │         └─ async: UPDATE running → sleep → succeeded/failed
+                  └─ Raft log ← placement decision (replicates to all 3 FSMs)
 GET /jobs/{id}
-   └─ gateway → JobService.GetJob → scheduler reads Postgres
+   └─ gateway → JobService.GetJob → any scheduler reads Postgres
 ```
 
-Watch placement decisions land: `docker compose logs -f scheduler-1 | grep placed`.
+## Consensus (Phase 3)
+
+Raft (hashicorp/raft) across scheduler-1/2/3: mTLS transport on :9444 under
+the same cluster CA as service gRPC, durable boltdb log + snapshots in a
+volume per instance. Postgres stays the store of record for jobs — the Raft
+log carries *placement authority*: who leads, and the replicated history of
+placement decisions.
+
+**Watch an election live** (terminal 1):
+
+```sh
+watch -n1 "curl -s localhost:8080/raft | python3 -m json.tool"
+```
+
+Then (terminal 2) kill whoever `/raft` names as leader and submit jobs while
+it happens:
+
+```sh
+docker compose stop scheduler-2       # if scheduler-2 is the leader
+curl -s -X POST localhost:8080/jobs -d '{"name":"failover-proof"}'
+docker compose start scheduler-2
+```
+
+What you'll see: the two survivors elect a new leader at term+1 within ~2s;
+the POST succeeds (gateway logs `routing to new leader`); the restarted node
+rejoins as a *follower* at the current term and its `applied_index` and
+`recent_placements` converge with the others. Every node's
+`recent_placements` list is identical — that's the replicated log applied on
+all three FSMs. Raft state is durable: restart the whole cluster and the
+term and placement history carry over.
 
 ## How the health check flows
 
@@ -130,7 +163,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 | **0 ✅** | Cluster boots; contracts compile; migrations apply | `/health` aggregates every component |
 | **1 ✅** | One job through REST → gRPC → worker → Postgres (no scheduler in the middle) | job status transitions via API |
 | **2 ✅** | Scheduler service in the placement path (single instance) | placement in scheduler-1 logs |
-| 3 | **Raft across 3 schedulers** — election + failover (the hard milestone) | leader visibly re-elected on kill |
+| **3 ✅** | **Raft across 3 schedulers** — election + failover (the hard milestone) | `GET /raft`: leader re-elected on kill, placement log identical on all nodes |
 | 4 | Worker backpressure + heartbeat crash detection & reassignment | on-screen reassignment |
 | 5 | CRDT statemanager | divergence/reconvergence visualization |
 | 6 | Transactional outbox dispatch | — |
