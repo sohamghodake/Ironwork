@@ -22,6 +22,555 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ReportJobEventRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	JobId  string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Worker string                 `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	// Terminal outcome: "succeeded" or "failed".
+	Outcome       string `protobuf:"bytes,3,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportJobEventRequest) Reset() {
+	*x = ReportJobEventRequest{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportJobEventRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportJobEventRequest) ProtoMessage() {}
+
+func (x *ReportJobEventRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportJobEventRequest.ProtoReflect.Descriptor instead.
+func (*ReportJobEventRequest) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ReportJobEventRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *ReportJobEventRequest) GetWorker() string {
+	if x != nil {
+		return x.Worker
+	}
+	return ""
+}
+
+func (x *ReportJobEventRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+type ReportJobEventResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportJobEventResponse) Reset() {
+	*x = ReportJobEventResponse{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportJobEventResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportJobEventResponse) ProtoMessage() {}
+
+func (x *ReportJobEventResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportJobEventResponse.ProtoReflect.Descriptor instead.
+func (*ReportJobEventResponse) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{1}
+}
+
+type SyncStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *CRDTState             `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncStateRequest) Reset() {
+	*x = SyncStateRequest{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncStateRequest) ProtoMessage() {}
+
+func (x *SyncStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncStateRequest.ProtoReflect.Descriptor instead.
+func (*SyncStateRequest) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SyncStateRequest) GetState() *CRDTState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type SyncStateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *CRDTState             `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncStateResponse) Reset() {
+	*x = SyncStateResponse{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncStateResponse) ProtoMessage() {}
+
+func (x *SyncStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncStateResponse.ProtoReflect.Descriptor instead.
+func (*SyncStateResponse) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SyncStateResponse) GetState() *CRDTState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+type GetCRDTStateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCRDTStateRequest) Reset() {
+	*x = GetCRDTStateRequest{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCRDTStateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCRDTStateRequest) ProtoMessage() {}
+
+func (x *GetCRDTStateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCRDTStateRequest.ProtoReflect.Descriptor instead.
+func (*GetCRDTStateRequest) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
+}
+
+type GetCRDTStateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *CRDTState             `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	GossipEnabled bool                   `protobuf:"varint,2,opt,name=gossip_enabled,json=gossipEnabled,proto3" json:"gossip_enabled,omitempty"`
+	// Replica id of the reporting statemanager.
+	Replica       string `protobuf:"bytes,3,opt,name=replica,proto3" json:"replica,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCRDTStateResponse) Reset() {
+	*x = GetCRDTStateResponse{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCRDTStateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCRDTStateResponse) ProtoMessage() {}
+
+func (x *GetCRDTStateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCRDTStateResponse.ProtoReflect.Descriptor instead.
+func (*GetCRDTStateResponse) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetCRDTStateResponse) GetState() *CRDTState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *GetCRDTStateResponse) GetGossipEnabled() bool {
+	if x != nil {
+		return x.GossipEnabled
+	}
+	return false
+}
+
+func (x *GetCRDTStateResponse) GetReplica() string {
+	if x != nil {
+		return x.Replica
+	}
+	return ""
+}
+
+type SetGossipRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGossipRequest) Reset() {
+	*x = SetGossipRequest{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGossipRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGossipRequest) ProtoMessage() {}
+
+func (x *SetGossipRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGossipRequest.ProtoReflect.Descriptor instead.
+func (*SetGossipRequest) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SetGossipRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetGossipResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGossipResponse) Reset() {
+	*x = SetGossipResponse{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGossipResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGossipResponse) ProtoMessage() {}
+
+func (x *SetGossipResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGossipResponse.ProtoReflect.Descriptor instead.
+func (*SetGossipResponse) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SetGossipResponse) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+// CRDTState is the mergeable payload: grow-only counters sharded by replica
+// plus a last-writer-wins map of recent job outcomes.
+type CRDTState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// status -> G-Counter (e.g. "succeeded" -> {statemanager-1: 4, ...}).
+	ByStatus map[string]*GCounterState `protobuf:"bytes,1,rep,name=by_status,json=byStatus,proto3" json:"by_status,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// worker -> G-Counter of completed jobs.
+	ByWorker map[string]*GCounterState `protobuf:"bytes,2,rep,name=by_worker,json=byWorker,proto3" json:"by_worker,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// job_id -> latest observed outcome (LWW, bounded window).
+	Recent        map[string]*LWWEntry `protobuf:"bytes,3,rep,name=recent,proto3" json:"recent,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CRDTState) Reset() {
+	*x = CRDTState{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CRDTState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CRDTState) ProtoMessage() {}
+
+func (x *CRDTState) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CRDTState.ProtoReflect.Descriptor instead.
+func (*CRDTState) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CRDTState) GetByStatus() map[string]*GCounterState {
+	if x != nil {
+		return x.ByStatus
+	}
+	return nil
+}
+
+func (x *CRDTState) GetByWorker() map[string]*GCounterState {
+	if x != nil {
+		return x.ByWorker
+	}
+	return nil
+}
+
+func (x *CRDTState) GetRecent() map[string]*LWWEntry {
+	if x != nil {
+		return x.Recent
+	}
+	return nil
+}
+
+type GCounterState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// replica id -> that replica's shard; merge = pointwise max, value = sum.
+	Shards        map[string]uint64 `protobuf:"bytes,1,rep,name=shards,proto3" json:"shards,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GCounterState) Reset() {
+	*x = GCounterState{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GCounterState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GCounterState) ProtoMessage() {}
+
+func (x *GCounterState) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GCounterState.ProtoReflect.Descriptor instead.
+func (*GCounterState) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GCounterState) GetShards() map[string]uint64 {
+	if x != nil {
+		return x.Shards
+	}
+	return nil
+}
+
+type LWWEntry struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Status   string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Worker   string                 `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	TsUnixMs int64                  `protobuf:"varint,3,opt,name=ts_unix_ms,json=tsUnixMs,proto3" json:"ts_unix_ms,omitempty"`
+	// Replica that observed the event; breaks timestamp ties.
+	Replica       string `protobuf:"bytes,4,opt,name=replica,proto3" json:"replica,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LWWEntry) Reset() {
+	*x = LWWEntry{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LWWEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LWWEntry) ProtoMessage() {}
+
+func (x *LWWEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LWWEntry.ProtoReflect.Descriptor instead.
+func (*LWWEntry) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LWWEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *LWWEntry) GetWorker() string {
+	if x != nil {
+		return x.Worker
+	}
+	return ""
+}
+
+func (x *LWWEntry) GetTsUnixMs() int64 {
+	if x != nil {
+		return x.TsUnixMs
+	}
+	return 0
+}
+
+func (x *LWWEntry) GetReplica() string {
+	if x != nil {
+		return x.Replica
+	}
+	return ""
+}
+
 type GetClusterStateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -30,7 +579,7 @@ type GetClusterStateRequest struct {
 
 func (x *GetClusterStateRequest) Reset() {
 	*x = GetClusterStateRequest{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[0]
+	mi := &file_ironwork_v1_state_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +591,7 @@ func (x *GetClusterStateRequest) String() string {
 func (*GetClusterStateRequest) ProtoMessage() {}
 
 func (x *GetClusterStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[0]
+	mi := &file_ironwork_v1_state_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +604,7 @@ func (x *GetClusterStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterStateRequest.ProtoReflect.Descriptor instead.
 func (*GetClusterStateRequest) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{0}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{11}
 }
 
 type GetClusterStateResponse struct {
@@ -67,7 +616,7 @@ type GetClusterStateResponse struct {
 
 func (x *GetClusterStateResponse) Reset() {
 	*x = GetClusterStateResponse{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[1]
+	mi := &file_ironwork_v1_state_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -79,7 +628,7 @@ func (x *GetClusterStateResponse) String() string {
 func (*GetClusterStateResponse) ProtoMessage() {}
 
 func (x *GetClusterStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[1]
+	mi := &file_ironwork_v1_state_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -92,7 +641,7 @@ func (x *GetClusterStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterStateResponse.ProtoReflect.Descriptor instead.
 func (*GetClusterStateResponse) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{1}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetClusterStateResponse) GetState() *ClusterState {
@@ -120,7 +669,7 @@ type ClusterState struct {
 
 func (x *ClusterState) Reset() {
 	*x = ClusterState{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[2]
+	mi := &file_ironwork_v1_state_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -132,7 +681,7 @@ func (x *ClusterState) String() string {
 func (*ClusterState) ProtoMessage() {}
 
 func (x *ClusterState) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[2]
+	mi := &file_ironwork_v1_state_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -145,7 +694,7 @@ func (x *ClusterState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterState.ProtoReflect.Descriptor instead.
 func (*ClusterState) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{2}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ClusterState) GetReportingNode() string {
@@ -204,7 +753,7 @@ type WorkerStatus struct {
 
 func (x *WorkerStatus) Reset() {
 	*x = WorkerStatus{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -216,7 +765,7 @@ func (x *WorkerStatus) String() string {
 func (*WorkerStatus) ProtoMessage() {}
 
 func (x *WorkerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -229,7 +778,7 @@ func (x *WorkerStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerStatus.ProtoReflect.Descriptor instead.
 func (*WorkerStatus) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *WorkerStatus) GetInstance() string {
@@ -287,7 +836,7 @@ type RaftStatus struct {
 
 func (x *RaftStatus) Reset() {
 	*x = RaftStatus{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +848,7 @@ func (x *RaftStatus) String() string {
 func (*RaftStatus) ProtoMessage() {}
 
 func (x *RaftStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +861,7 @@ func (x *RaftStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftStatus.ProtoReflect.Descriptor instead.
 func (*RaftStatus) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RaftStatus) GetState() string {
@@ -375,7 +924,7 @@ type PlacementRecord struct {
 
 func (x *PlacementRecord) Reset() {
 	*x = PlacementRecord{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	mi := &file_ironwork_v1_state_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -387,7 +936,7 @@ func (x *PlacementRecord) String() string {
 func (*PlacementRecord) ProtoMessage() {}
 
 func (x *PlacementRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	mi := &file_ironwork_v1_state_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -400,7 +949,7 @@ func (x *PlacementRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementRecord.ProtoReflect.Descriptor instead.
 func (*PlacementRecord) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{5}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PlacementRecord) GetJobId() string {
@@ -436,7 +985,7 @@ type NodeInfo struct {
 
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	mi := &file_ironwork_v1_state_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -448,7 +997,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	mi := &file_ironwork_v1_state_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -461,7 +1010,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{6}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *NodeInfo) GetId() string {
@@ -498,7 +1047,7 @@ type JobCounts struct {
 
 func (x *JobCounts) Reset() {
 	*x = JobCounts{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[7]
+	mi := &file_ironwork_v1_state_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +1059,7 @@ func (x *JobCounts) String() string {
 func (*JobCounts) ProtoMessage() {}
 
 func (x *JobCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[7]
+	mi := &file_ironwork_v1_state_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +1072,7 @@ func (x *JobCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobCounts.ProtoReflect.Descriptor instead.
 func (*JobCounts) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{7}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *JobCounts) GetPending() uint64 {
@@ -565,7 +1114,49 @@ var File_ironwork_v1_state_proto protoreflect.FileDescriptor
 
 const file_ironwork_v1_state_proto_rawDesc = "" +
 	"\n" +
-	"\x17ironwork/v1/state.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x18\n" +
+	"\x17ironwork/v1/state.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"`\n" +
+	"\x15ReportJobEventRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
+	"\x06worker\x18\x02 \x01(\tR\x06worker\x12\x18\n" +
+	"\aoutcome\x18\x03 \x01(\tR\aoutcome\"\x18\n" +
+	"\x16ReportJobEventResponse\"@\n" +
+	"\x10SyncStateRequest\x12,\n" +
+	"\x05state\x18\x01 \x01(\v2\x16.ironwork.v1.CRDTStateR\x05state\"A\n" +
+	"\x11SyncStateResponse\x12,\n" +
+	"\x05state\x18\x01 \x01(\v2\x16.ironwork.v1.CRDTStateR\x05state\"\x15\n" +
+	"\x13GetCRDTStateRequest\"\x85\x01\n" +
+	"\x14GetCRDTStateResponse\x12,\n" +
+	"\x05state\x18\x01 \x01(\v2\x16.ironwork.v1.CRDTStateR\x05state\x12%\n" +
+	"\x0egossip_enabled\x18\x02 \x01(\bR\rgossipEnabled\x12\x18\n" +
+	"\areplica\x18\x03 \x01(\tR\areplica\",\n" +
+	"\x10SetGossipRequest\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"-\n" +
+	"\x11SetGossipResponse\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\"\xd1\x03\n" +
+	"\tCRDTState\x12A\n" +
+	"\tby_status\x18\x01 \x03(\v2$.ironwork.v1.CRDTState.ByStatusEntryR\bbyStatus\x12A\n" +
+	"\tby_worker\x18\x02 \x03(\v2$.ironwork.v1.CRDTState.ByWorkerEntryR\bbyWorker\x12:\n" +
+	"\x06recent\x18\x03 \x03(\v2\".ironwork.v1.CRDTState.RecentEntryR\x06recent\x1aW\n" +
+	"\rByStatusEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.ironwork.v1.GCounterStateR\x05value:\x028\x01\x1aW\n" +
+	"\rByWorkerEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.ironwork.v1.GCounterStateR\x05value:\x028\x01\x1aP\n" +
+	"\vRecentEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
+	"\x05value\x18\x02 \x01(\v2\x15.ironwork.v1.LWWEntryR\x05value:\x028\x01\"\x8a\x01\n" +
+	"\rGCounterState\x12>\n" +
+	"\x06shards\x18\x01 \x03(\v2&.ironwork.v1.GCounterState.ShardsEntryR\x06shards\x1a9\n" +
+	"\vShardsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"r\n" +
+	"\bLWWEntry\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x16\n" +
+	"\x06worker\x18\x02 \x01(\tR\x06worker\x12\x1c\n" +
+	"\n" +
+	"ts_unix_ms\x18\x03 \x01(\x03R\btsUnixMs\x12\x18\n" +
+	"\areplica\x18\x04 \x01(\tR\areplica\"\x18\n" +
 	"\x16GetClusterStateRequest\"J\n" +
 	"\x17GetClusterStateResponse\x12/\n" +
 	"\x05state\x18\x01 \x01(\v2\x19.ironwork.v1.ClusterStateR\x05state\"\xac\x02\n" +
@@ -605,9 +1196,13 @@ const file_ironwork_v1_state_proto_rawDesc = "" +
 	"\tscheduled\x18\x02 \x01(\x04R\tscheduled\x12\x18\n" +
 	"\arunning\x18\x03 \x01(\x04R\arunning\x12\x1c\n" +
 	"\tsucceeded\x18\x04 \x01(\x04R\tsucceeded\x12\x16\n" +
-	"\x06failed\x18\x05 \x01(\x04R\x06failed2l\n" +
+	"\x06failed\x18\x05 \x01(\x04R\x06failed2\xb4\x03\n" +
 	"\fStateService\x12\\\n" +
-	"\x0fGetClusterState\x12#.ironwork.v1.GetClusterStateRequest\x1a$.ironwork.v1.GetClusterStateResponseB\xa7\x01\n" +
+	"\x0fGetClusterState\x12#.ironwork.v1.GetClusterStateRequest\x1a$.ironwork.v1.GetClusterStateResponse\x12Y\n" +
+	"\x0eReportJobEvent\x12\".ironwork.v1.ReportJobEventRequest\x1a#.ironwork.v1.ReportJobEventResponse\x12J\n" +
+	"\tSyncState\x12\x1d.ironwork.v1.SyncStateRequest\x1a\x1e.ironwork.v1.SyncStateResponse\x12S\n" +
+	"\fGetCRDTState\x12 .ironwork.v1.GetCRDTStateRequest\x1a!.ironwork.v1.GetCRDTStateResponse\x12J\n" +
+	"\tSetGossip\x12\x1d.ironwork.v1.SetGossipRequest\x1a\x1e.ironwork.v1.SetGossipResponseB\xa7\x01\n" +
 	"\x0fcom.ironwork.v1B\n" +
 	"StateProtoP\x01Z;github.com/sohamghodake/ironwork/gen/ironwork/v1;ironworkv1\xa2\x02\x03IXX\xaa\x02\vIronwork.V1\xca\x02\vIronwork\\V1\xe2\x02\x17Ironwork\\V1\\GPBMetadata\xea\x02\fIronwork::V1b\x06proto3"
 
@@ -623,34 +1218,67 @@ func file_ironwork_v1_state_proto_rawDescGZIP() []byte {
 	return file_ironwork_v1_state_proto_rawDescData
 }
 
-var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_ironwork_v1_state_proto_goTypes = []any{
-	(*GetClusterStateRequest)(nil),  // 0: ironwork.v1.GetClusterStateRequest
-	(*GetClusterStateResponse)(nil), // 1: ironwork.v1.GetClusterStateResponse
-	(*ClusterState)(nil),            // 2: ironwork.v1.ClusterState
-	(*WorkerStatus)(nil),            // 3: ironwork.v1.WorkerStatus
-	(*RaftStatus)(nil),              // 4: ironwork.v1.RaftStatus
-	(*PlacementRecord)(nil),         // 5: ironwork.v1.PlacementRecord
-	(*NodeInfo)(nil),                // 6: ironwork.v1.NodeInfo
-	(*JobCounts)(nil),               // 7: ironwork.v1.JobCounts
-	(*timestamppb.Timestamp)(nil),   // 8: google.protobuf.Timestamp
+	(*ReportJobEventRequest)(nil),   // 0: ironwork.v1.ReportJobEventRequest
+	(*ReportJobEventResponse)(nil),  // 1: ironwork.v1.ReportJobEventResponse
+	(*SyncStateRequest)(nil),        // 2: ironwork.v1.SyncStateRequest
+	(*SyncStateResponse)(nil),       // 3: ironwork.v1.SyncStateResponse
+	(*GetCRDTStateRequest)(nil),     // 4: ironwork.v1.GetCRDTStateRequest
+	(*GetCRDTStateResponse)(nil),    // 5: ironwork.v1.GetCRDTStateResponse
+	(*SetGossipRequest)(nil),        // 6: ironwork.v1.SetGossipRequest
+	(*SetGossipResponse)(nil),       // 7: ironwork.v1.SetGossipResponse
+	(*CRDTState)(nil),               // 8: ironwork.v1.CRDTState
+	(*GCounterState)(nil),           // 9: ironwork.v1.GCounterState
+	(*LWWEntry)(nil),                // 10: ironwork.v1.LWWEntry
+	(*GetClusterStateRequest)(nil),  // 11: ironwork.v1.GetClusterStateRequest
+	(*GetClusterStateResponse)(nil), // 12: ironwork.v1.GetClusterStateResponse
+	(*ClusterState)(nil),            // 13: ironwork.v1.ClusterState
+	(*WorkerStatus)(nil),            // 14: ironwork.v1.WorkerStatus
+	(*RaftStatus)(nil),              // 15: ironwork.v1.RaftStatus
+	(*PlacementRecord)(nil),         // 16: ironwork.v1.PlacementRecord
+	(*NodeInfo)(nil),                // 17: ironwork.v1.NodeInfo
+	(*JobCounts)(nil),               // 18: ironwork.v1.JobCounts
+	nil,                             // 19: ironwork.v1.CRDTState.ByStatusEntry
+	nil,                             // 20: ironwork.v1.CRDTState.ByWorkerEntry
+	nil,                             // 21: ironwork.v1.CRDTState.RecentEntry
+	nil,                             // 22: ironwork.v1.GCounterState.ShardsEntry
+	(*timestamppb.Timestamp)(nil),   // 23: google.protobuf.Timestamp
 }
 var file_ironwork_v1_state_proto_depIdxs = []int32{
-	2, // 0: ironwork.v1.GetClusterStateResponse.state:type_name -> ironwork.v1.ClusterState
-	6, // 1: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
-	7, // 2: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
-	8, // 3: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
-	4, // 4: ironwork.v1.ClusterState.raft:type_name -> ironwork.v1.RaftStatus
-	3, // 5: ironwork.v1.ClusterState.workers:type_name -> ironwork.v1.WorkerStatus
-	5, // 6: ironwork.v1.RaftStatus.recent_placements:type_name -> ironwork.v1.PlacementRecord
-	8, // 7: ironwork.v1.PlacementRecord.at:type_name -> google.protobuf.Timestamp
-	0, // 8: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
-	1, // 9: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
-	9, // [9:10] is the sub-list for method output_type
-	8, // [8:9] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	8,  // 0: ironwork.v1.SyncStateRequest.state:type_name -> ironwork.v1.CRDTState
+	8,  // 1: ironwork.v1.SyncStateResponse.state:type_name -> ironwork.v1.CRDTState
+	8,  // 2: ironwork.v1.GetCRDTStateResponse.state:type_name -> ironwork.v1.CRDTState
+	19, // 3: ironwork.v1.CRDTState.by_status:type_name -> ironwork.v1.CRDTState.ByStatusEntry
+	20, // 4: ironwork.v1.CRDTState.by_worker:type_name -> ironwork.v1.CRDTState.ByWorkerEntry
+	21, // 5: ironwork.v1.CRDTState.recent:type_name -> ironwork.v1.CRDTState.RecentEntry
+	22, // 6: ironwork.v1.GCounterState.shards:type_name -> ironwork.v1.GCounterState.ShardsEntry
+	13, // 7: ironwork.v1.GetClusterStateResponse.state:type_name -> ironwork.v1.ClusterState
+	17, // 8: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
+	18, // 9: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
+	23, // 10: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
+	15, // 11: ironwork.v1.ClusterState.raft:type_name -> ironwork.v1.RaftStatus
+	14, // 12: ironwork.v1.ClusterState.workers:type_name -> ironwork.v1.WorkerStatus
+	16, // 13: ironwork.v1.RaftStatus.recent_placements:type_name -> ironwork.v1.PlacementRecord
+	23, // 14: ironwork.v1.PlacementRecord.at:type_name -> google.protobuf.Timestamp
+	9,  // 15: ironwork.v1.CRDTState.ByStatusEntry.value:type_name -> ironwork.v1.GCounterState
+	9,  // 16: ironwork.v1.CRDTState.ByWorkerEntry.value:type_name -> ironwork.v1.GCounterState
+	10, // 17: ironwork.v1.CRDTState.RecentEntry.value:type_name -> ironwork.v1.LWWEntry
+	11, // 18: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
+	0,  // 19: ironwork.v1.StateService.ReportJobEvent:input_type -> ironwork.v1.ReportJobEventRequest
+	2,  // 20: ironwork.v1.StateService.SyncState:input_type -> ironwork.v1.SyncStateRequest
+	4,  // 21: ironwork.v1.StateService.GetCRDTState:input_type -> ironwork.v1.GetCRDTStateRequest
+	6,  // 22: ironwork.v1.StateService.SetGossip:input_type -> ironwork.v1.SetGossipRequest
+	12, // 23: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
+	1,  // 24: ironwork.v1.StateService.ReportJobEvent:output_type -> ironwork.v1.ReportJobEventResponse
+	3,  // 25: ironwork.v1.StateService.SyncState:output_type -> ironwork.v1.SyncStateResponse
+	5,  // 26: ironwork.v1.StateService.GetCRDTState:output_type -> ironwork.v1.GetCRDTStateResponse
+	7,  // 27: ironwork.v1.StateService.SetGossip:output_type -> ironwork.v1.SetGossipResponse
+	23, // [23:28] is the sub-list for method output_type
+	18, // [18:23] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_ironwork_v1_state_proto_init() }
@@ -664,7 +1292,7 @@ func file_ironwork_v1_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ironwork_v1_state_proto_rawDesc), len(file_ironwork_v1_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

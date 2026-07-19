@@ -20,16 +20,34 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	StateService_GetClusterState_FullMethodName = "/ironwork.v1.StateService/GetClusterState"
+	StateService_ReportJobEvent_FullMethodName  = "/ironwork.v1.StateService/ReportJobEvent"
+	StateService_SyncState_FullMethodName       = "/ironwork.v1.StateService/SyncState"
+	StateService_GetCRDTState_FullMethodName    = "/ironwork.v1.StateService/GetCRDTState"
+	StateService_SetGossip_FullMethodName       = "/ironwork.v1.StateService/SetGossip"
 )
 
 // StateServiceClient is the client API for StateService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// StateService exposes cluster state snapshots. In Phase 5 the statemanager
-// gains CRDT replication RPCs here; Phase 0 only defines the read contract.
+// StateService has two servers with different halves (like WorkerService):
+// schedulers serve GetClusterState with their Raft + worker-registry view;
+// statemanager replicas serve GetClusterState plus the CRDT half — an
+// eventually-consistent job-statistics view replicated by push-pull gossip
+// (SyncState), fed by worker reports (ReportJobEvent), inspectable for the
+// convergence dashboard (GetCRDTState), with partition simulation
+// (SetGossip).
 type StateServiceClient interface {
 	GetClusterState(ctx context.Context, in *GetClusterStateRequest, opts ...grpc.CallOption) (*GetClusterStateResponse, error)
+	// ReportJobEvent ingests one terminal job outcome into this replica's CRDT.
+	ReportJobEvent(ctx context.Context, in *ReportJobEventRequest, opts ...grpc.CallOption) (*ReportJobEventResponse, error)
+	// SyncState is one push-pull gossip exchange: the receiver merges the
+	// sender's state and replies with its own (merged) state.
+	SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error)
+	GetCRDTState(ctx context.Context, in *GetCRDTStateRequest, opts ...grpc.CallOption) (*GetCRDTStateResponse, error)
+	// SetGossip toggles gossip participation — disabling it on replicas
+	// simulates a network partition while writes continue.
+	SetGossip(ctx context.Context, in *SetGossipRequest, opts ...grpc.CallOption) (*SetGossipResponse, error)
 }
 
 type stateServiceClient struct {
@@ -50,14 +68,68 @@ func (c *stateServiceClient) GetClusterState(ctx context.Context, in *GetCluster
 	return out, nil
 }
 
+func (c *stateServiceClient) ReportJobEvent(ctx context.Context, in *ReportJobEventRequest, opts ...grpc.CallOption) (*ReportJobEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportJobEventResponse)
+	err := c.cc.Invoke(ctx, StateService_ReportJobEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stateServiceClient) SyncState(ctx context.Context, in *SyncStateRequest, opts ...grpc.CallOption) (*SyncStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncStateResponse)
+	err := c.cc.Invoke(ctx, StateService_SyncState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stateServiceClient) GetCRDTState(ctx context.Context, in *GetCRDTStateRequest, opts ...grpc.CallOption) (*GetCRDTStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCRDTStateResponse)
+	err := c.cc.Invoke(ctx, StateService_GetCRDTState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stateServiceClient) SetGossip(ctx context.Context, in *SetGossipRequest, opts ...grpc.CallOption) (*SetGossipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetGossipResponse)
+	err := c.cc.Invoke(ctx, StateService_SetGossip_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StateServiceServer is the server API for StateService service.
 // All implementations must embed UnimplementedStateServiceServer
 // for forward compatibility.
 //
-// StateService exposes cluster state snapshots. In Phase 5 the statemanager
-// gains CRDT replication RPCs here; Phase 0 only defines the read contract.
+// StateService has two servers with different halves (like WorkerService):
+// schedulers serve GetClusterState with their Raft + worker-registry view;
+// statemanager replicas serve GetClusterState plus the CRDT half — an
+// eventually-consistent job-statistics view replicated by push-pull gossip
+// (SyncState), fed by worker reports (ReportJobEvent), inspectable for the
+// convergence dashboard (GetCRDTState), with partition simulation
+// (SetGossip).
 type StateServiceServer interface {
 	GetClusterState(context.Context, *GetClusterStateRequest) (*GetClusterStateResponse, error)
+	// ReportJobEvent ingests one terminal job outcome into this replica's CRDT.
+	ReportJobEvent(context.Context, *ReportJobEventRequest) (*ReportJobEventResponse, error)
+	// SyncState is one push-pull gossip exchange: the receiver merges the
+	// sender's state and replies with its own (merged) state.
+	SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error)
+	GetCRDTState(context.Context, *GetCRDTStateRequest) (*GetCRDTStateResponse, error)
+	// SetGossip toggles gossip participation — disabling it on replicas
+	// simulates a network partition while writes continue.
+	SetGossip(context.Context, *SetGossipRequest) (*SetGossipResponse, error)
 	mustEmbedUnimplementedStateServiceServer()
 }
 
@@ -70,6 +142,18 @@ type UnimplementedStateServiceServer struct{}
 
 func (UnimplementedStateServiceServer) GetClusterState(context.Context, *GetClusterStateRequest) (*GetClusterStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClusterState not implemented")
+}
+func (UnimplementedStateServiceServer) ReportJobEvent(context.Context, *ReportJobEventRequest) (*ReportJobEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportJobEvent not implemented")
+}
+func (UnimplementedStateServiceServer) SyncState(context.Context, *SyncStateRequest) (*SyncStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncState not implemented")
+}
+func (UnimplementedStateServiceServer) GetCRDTState(context.Context, *GetCRDTStateRequest) (*GetCRDTStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCRDTState not implemented")
+}
+func (UnimplementedStateServiceServer) SetGossip(context.Context, *SetGossipRequest) (*SetGossipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetGossip not implemented")
 }
 func (UnimplementedStateServiceServer) mustEmbedUnimplementedStateServiceServer() {}
 func (UnimplementedStateServiceServer) testEmbeddedByValue()                      {}
@@ -110,6 +194,78 @@ func _StateService_GetClusterState_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StateService_ReportJobEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportJobEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).ReportJobEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_ReportJobEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).ReportJobEvent(ctx, req.(*ReportJobEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StateService_SyncState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).SyncState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_SyncState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).SyncState(ctx, req.(*SyncStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StateService_GetCRDTState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCRDTStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).GetCRDTState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_GetCRDTState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).GetCRDTState(ctx, req.(*GetCRDTStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StateService_SetGossip_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetGossipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).SetGossip(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_SetGossip_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).SetGossip(ctx, req.(*SetGossipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StateService_ServiceDesc is the grpc.ServiceDesc for StateService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +276,22 @@ var StateService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetClusterState",
 			Handler:    _StateService_GetClusterState_Handler,
+		},
+		{
+			MethodName: "ReportJobEvent",
+			Handler:    _StateService_ReportJobEvent_Handler,
+		},
+		{
+			MethodName: "SyncState",
+			Handler:    _StateService_SyncState_Handler,
+		},
+		{
+			MethodName: "GetCRDTState",
+			Handler:    _StateService_GetCRDTState_Handler,
+		},
+		{
+			MethodName: "SetGossip",
+			Handler:    _StateService_SetGossip_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

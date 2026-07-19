@@ -4,10 +4,82 @@ package ironwork.v1;
 
 import "google/protobuf/timestamp.proto";
 
-// StateService exposes cluster state snapshots. In Phase 5 the statemanager
-// gains CRDT replication RPCs here; Phase 0 only defines the read contract.
+// StateService has two servers with different halves (like WorkerService):
+// schedulers serve GetClusterState with their Raft + worker-registry view;
+// statemanager replicas serve GetClusterState plus the CRDT half — an
+// eventually-consistent job-statistics view replicated by push-pull gossip
+// (SyncState), fed by worker reports (ReportJobEvent), inspectable for the
+// convergence dashboard (GetCRDTState), with partition simulation
+// (SetGossip).
 service StateService {
   rpc GetClusterState(GetClusterStateRequest) returns (GetClusterStateResponse);
+  // ReportJobEvent ingests one terminal job outcome into this replica's CRDT.
+  rpc ReportJobEvent(ReportJobEventRequest) returns (ReportJobEventResponse);
+  // SyncState is one push-pull gossip exchange: the receiver merges the
+  // sender's state and replies with its own (merged) state.
+  rpc SyncState(SyncStateRequest) returns (SyncStateResponse);
+  rpc GetCRDTState(GetCRDTStateRequest) returns (GetCRDTStateResponse);
+  // SetGossip toggles gossip participation — disabling it on replicas
+  // simulates a network partition while writes continue.
+  rpc SetGossip(SetGossipRequest) returns (SetGossipResponse);
+}
+
+message ReportJobEventRequest {
+  string job_id = 1;
+  string worker = 2;
+  // Terminal outcome: "succeeded" or "failed".
+  string outcome = 3;
+}
+
+message ReportJobEventResponse {}
+
+message SyncStateRequest {
+  CRDTState state = 1;
+}
+
+message SyncStateResponse {
+  CRDTState state = 1;
+}
+
+message GetCRDTStateRequest {}
+
+message GetCRDTStateResponse {
+  CRDTState state = 1;
+  bool gossip_enabled = 2;
+  // Replica id of the reporting statemanager.
+  string replica = 3;
+}
+
+message SetGossipRequest {
+  bool enabled = 1;
+}
+
+message SetGossipResponse {
+  bool enabled = 1;
+}
+
+// CRDTState is the mergeable payload: grow-only counters sharded by replica
+// plus a last-writer-wins map of recent job outcomes.
+message CRDTState {
+  // status -> G-Counter (e.g. "succeeded" -> {statemanager-1: 4, ...}).
+  map<string, GCounterState> by_status = 1;
+  // worker -> G-Counter of completed jobs.
+  map<string, GCounterState> by_worker = 2;
+  // job_id -> latest observed outcome (LWW, bounded window).
+  map<string, LWWEntry> recent = 3;
+}
+
+message GCounterState {
+  // replica id -> that replica's shard; merge = pointwise max, value = sum.
+  map<string, uint64> shards = 1;
+}
+
+message LWWEntry {
+  string status = 1;
+  string worker = 2;
+  int64 ts_unix_ms = 3;
+  // Replica that observed the event; breaks timestamp ties.
+  string replica = 4;
 }
 
 message GetClusterStateRequest {}
