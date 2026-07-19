@@ -121,15 +121,17 @@ func TestSubmitJobPlaces(t *testing.T) {
 	assert.Equal(t, []byte(`{"duration_ms":100}`), resp.Job.Payload)
 }
 
-func TestSubmitJobPlacementFailureMarksFailed(t *testing.T) {
+func TestSubmitJobPlacementFailureLeavesPending(t *testing.T) {
 	st := newFakeStore()
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("all workers down")}, &fakePlacementLog{})
+	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("all workers full")}, &fakePlacementLog{})
 
 	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
 
-	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_FAILED, resp.Job.Status)
-	assert.Contains(t, resp.Job.Error, "all workers down")
+	// Backpressure: the job stays pending for the reaper's retry sweep
+	// instead of failing outright.
+	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_PENDING, resp.Job.Status)
+	assert.Empty(t, resp.Job.Error)
 }
 
 func TestSubmitJobValidatesName(t *testing.T) {

@@ -35,16 +35,24 @@ type worker struct {
 	close  func() error
 }
 
-// Dispatcher places jobs on workers round-robin.
+// CandidateProvider names the workers currently eligible for placement, best
+// candidate first (Phase 4: the heartbeat registry — live and non-full,
+// most headroom first). A nil provider means every configured worker is
+// eligible, tried round-robin.
+type CandidateProvider func() []string
+
+// Dispatcher places jobs on workers.
 type Dispatcher struct {
-	workers []worker
-	next    atomic.Uint64
-	log     zerolog.Logger
+	workers    []worker
+	byName     map[string]worker
+	candidates CandidateProvider
+	next       atomic.Uint64
+	log        zerolog.Logger
 }
 
 // New builds a dispatcher over the configured workers (instance name -> gRPC
-// address), connecting lazily with the given client mTLS config.
-func New(workers map[string]string, tlsCfg *tls.Config, log zerolog.Logger) (*Dispatcher, error) {
+// address) with the given client mTLS config.
+func New(workers map[string]string, tlsCfg *tls.Config, candidates CandidateProvider, log zerolog.Logger) (*Dispatcher, error) {
 	if len(workers) == 0 {
 		return nil, fmt.Errorf("dispatch: no workers configured (IRONWORK_WORKERS)")
 	}
@@ -56,7 +64,7 @@ func New(workers map[string]string, tlsCfg *tls.Config, log zerolog.Logger) (*Di
 	sort.Strings(names)
 
 	creds := credentials.NewTLS(tlsCfg)
-	d := &Dispatcher{log: log}
+	d := &Dispatcher{byName: map[string]worker{}, candidates: candidates, log: log}
 	for _, name := range names {
 		conn, err := grpc.NewClient(workers[name], grpc.WithTransportCredentials(creds))
 		if err != nil {
@@ -66,23 +74,47 @@ func New(workers map[string]string, tlsCfg *tls.Config, log zerolog.Logger) (*Di
 		// Dial eagerly: otherwise the first dispatch after boot races the
 		// connection handshake and can burn its whole attempt timeout.
 		conn.Connect()
-		d.workers = append(d.workers, worker{
+		w := worker{
 			name:   name,
 			client: ironworkv1.NewWorkerServiceClient(conn),
 			close:  conn.Close,
-		})
+		}
+		d.workers = append(d.workers, w)
+		d.byName[name] = w
 	}
 	return d, nil
 }
 
-// Dispatch offers the job to workers starting at the round-robin cursor and
-// returns the instance name of the first worker that accepts.
-func (d *Dispatcher) Dispatch(ctx context.Context, job *store.Job) (string, error) {
-	start := d.next.Add(1) - 1
-	var lastErr error
-	for i := range d.workers {
-		w := d.workers[(start+uint64(i))%uint64(len(d.workers))]
+// eligible returns the workers to offer the job to, in attempt order.
+func (d *Dispatcher) eligible() []worker {
+	if d.candidates == nil {
+		start := d.next.Add(1) - 1
+		out := make([]worker, len(d.workers))
+		for i := range d.workers {
+			out[i] = d.workers[(start+uint64(i))%uint64(len(d.workers))]
+		}
+		return out
+	}
+	out := []worker{}
+	for _, name := range d.candidates() {
+		if w, ok := d.byName[name]; ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
 
+// Dispatch offers the job to eligible workers in order and returns the
+// instance name of the first that accepts. Rejections (including
+// ResourceExhausted backpressure) fall through to the next candidate.
+func (d *Dispatcher) Dispatch(ctx context.Context, job *store.Job) (string, error) {
+	workers := d.eligible()
+	if len(workers) == 0 {
+		return "", fmt.Errorf("dispatch: no available workers for job %s", job.ID)
+	}
+
+	var lastErr error
+	for _, w := range workers {
 		actx, cancel := context.WithTimeout(ctx, perAttemptTimeout)
 		resp, err := w.client.ExecuteJob(actx, &ironworkv1.ExecuteJobRequest{
 			JobId:   job.ID,

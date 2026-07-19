@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -43,11 +44,12 @@ type payload struct {
 type Server struct {
 	ironworkv1.UnimplementedWorkerServiceServer
 
-	store    JobStore
-	instance string
-	sem      chan struct{}
-	inflight sync.WaitGroup
-	log      zerolog.Logger
+	store     JobStore
+	instance  string
+	capacity  int32
+	inflightN atomic.Int32
+	inflight  sync.WaitGroup
+	log       zerolog.Logger
 }
 
 // New builds a worker service executing at most capacity jobs concurrently.
@@ -58,20 +60,40 @@ func New(instance string, st JobStore, capacity int, log zerolog.Logger) *Server
 	return &Server{
 		store:    st,
 		instance: instance,
-		sem:      make(chan struct{}, capacity),
+		capacity: int32(capacity), //nolint:gosec // capacity is a small config value
 		log:      log,
 	}
 }
 
-// ExecuteJob records acceptance synchronously (status -> scheduled), then
-// executes in the background and acks. Jobs beyond capacity stay scheduled
-// until a slot frees.
+// Inflight reports jobs currently accepted and not yet finished; heartbeats
+// carry it so schedulers can steer placement (backpressure).
+func (s *Server) Inflight() int { return int(s.inflightN.Load()) }
+
+// Capacity reports the concurrency cap.
+func (s *Server) Capacity() int { return int(s.capacity) }
+
+// ExecuteJob rejects at capacity (backpressure: the placer falls through to
+// another worker), otherwise records acceptance synchronously (status ->
+// scheduled), then executes in the background and acks.
 func (s *Server) ExecuteJob(ctx context.Context, req *ironworkv1.ExecuteJobRequest) (*ironworkv1.ExecuteJobResponse, error) {
 	if req.JobId == "" {
 		return nil, status.Error(codes.InvalidArgument, "job_id is required")
 	}
 
+	// Reserve a slot before touching the database; give it back on any
+	// rejection path.
+	for {
+		cur := s.inflightN.Load()
+		if cur >= s.capacity {
+			return nil, status.Errorf(codes.ResourceExhausted, "worker %s at capacity (%d/%d)", s.instance, cur, s.capacity)
+		}
+		if s.inflightN.CompareAndSwap(cur, cur+1) {
+			break
+		}
+	}
+
 	if err := s.store.MarkScheduled(ctx, req.JobId, s.instance); err != nil {
+		s.inflightN.Add(-1)
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "job %s not found", req.JobId)
 		}
@@ -87,8 +109,7 @@ func (s *Server) ExecuteJob(ctx context.Context, req *ironworkv1.ExecuteJobReque
 
 func (s *Server) run(jobID string, rawPayload []byte) {
 	defer s.inflight.Done()
-	s.sem <- struct{}{}
-	defer func() { <-s.sem }()
+	defer s.inflightN.Add(-1)
 
 	// Detached from the RPC context: execution outlives the ExecuteJob call.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*maxSleep)

@@ -132,19 +132,31 @@ func TestExecuteJobRequiresJobID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
-func TestCapacityQueuesButFinishesAll(t *testing.T) {
+func TestCapacityRejectsWithResourceExhausted(t *testing.T) {
 	fs := newFakeStore()
 	svc := workersvc.New("worker-1", fs, 1, zerolog.Nop()) // single slot
 
-	for _, id := range []string{"q-1", "q-2", "q-3"} {
-		_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
-			JobId: id, Payload: []byte(`{"duration_ms":20}`),
-		})
-		require.NoError(t, err)
-	}
+	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
+		JobId: "q-1", Payload: []byte(`{"duration_ms":200}`),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, svc.Inflight())
 
+	// Second job while the first still runs: backpressure kicks in.
+	_, err = svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
+		JobId: "q-2", Payload: []byte(`{"duration_ms":200}`),
+	})
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+	assert.Equal(t, []string{"q-1"}, fs.scheduled, "rejected jobs must not be marked scheduled")
+
+	// The slot frees once the first job finishes.
+	assert.Empty(t, fs.waitTerminal(t, "q-1"))
 	svc.Drain(5 * time.Second)
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-	assert.Len(t, fs.finished, 3)
+	assert.Zero(t, svc.Inflight())
+
+	_, err = svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
+		JobId: "q-3", Payload: []byte(`{"duration_ms":10}`),
+	})
+	require.NoError(t, err)
+	assert.Empty(t, fs.waitTerminal(t, "q-3"))
 }

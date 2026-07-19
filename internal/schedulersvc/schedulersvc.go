@@ -30,7 +30,6 @@ type JobStore interface {
 	CreateJob(ctx context.Context, name string, payload []byte) (*store.Job, error)
 	GetJob(ctx context.Context, id string) (*store.Job, error)
 	ListJobs(ctx context.Context, status string, limit int) ([]*store.Job, error)
-	MarkFinished(ctx context.Context, id string, succeeded bool, errMsg string) error
 }
 
 // JobDispatcher places an accepted job on a worker.
@@ -84,10 +83,11 @@ func (s *Server) SubmitJob(ctx context.Context, req *ironworkv1.SubmitJobRequest
 	}
 
 	if worker, err := s.disp.Dispatch(ctx, job); err != nil {
-		s.log.Warn().Err(err).Str("job_id", job.ID).Msg("placement failed")
-		if merr := s.store.MarkFinished(ctx, job.ID, false, err.Error()); merr != nil {
-			s.log.Error().Err(merr).Str("job_id", job.ID).Msg("mark placement failure")
-		}
+		// All workers full or unreachable: the job stays pending and the
+		// leader's reaper retries placement until capacity frees up or the
+		// job exceeds its placement budget. This is backpressure surfacing
+		// to the API as status "pending", not an error.
+		s.log.Warn().Err(err).Str("job_id", job.ID).Msg("placement deferred")
 	} else {
 		s.log.Info().Str("job_id", job.ID).Str("worker", worker).Msg("job placed")
 		// Replicate the decision through the Raft log. The job is already

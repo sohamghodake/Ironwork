@@ -74,6 +74,25 @@ func TestDispatchAllWorkersFailing(t *testing.T) {
 }
 
 func TestNewRequiresWorkers(t *testing.T) {
-	_, err := New(nil, nil, zerolog.Nop())
+	_, err := New(nil, nil, nil, zerolog.Nop())
 	assert.ErrorContains(t, err, "no workers configured")
+}
+
+func TestDispatchFollowsCandidateProvider(t *testing.T) {
+	a := &fakeClient{name: "worker-1"}
+	b := &fakeClient{name: "worker-2"}
+	candidates := []string{"worker-2"} // registry says only worker-2 has headroom
+	d := testDispatcher(a, b)
+	d.byName = map[string]worker{"worker-1": d.workers[0], "worker-2": d.workers[1]}
+	d.candidates = func() []string { return candidates }
+
+	got, err := d.Dispatch(context.Background(), &store.Job{ID: "j"})
+	require.NoError(t, err)
+	assert.Equal(t, "worker-2", got)
+	assert.Zero(t, a.calls, "ineligible workers are never offered the job")
+
+	// No candidates at all: backpressure surfaces as an immediate error.
+	candidates = nil
+	_, err = d.Dispatch(context.Background(), &store.Job{ID: "j2"})
+	assert.ErrorContains(t, err, "no available workers")
 }
