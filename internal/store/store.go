@@ -128,6 +128,55 @@ func (s *Store) MarkFinished(ctx context.Context, id string, succeeded bool, err
 		 updated_at = now() WHERE id = $1::uuid`, id, status, errMsg)
 }
 
+// ReclaimJobs returns a crashed worker's in-flight jobs to pending (clearing
+// the assignment) and reports the reclaimed rows so the caller can re-place
+// or fail them.
+func (s *Store) ReclaimJobs(ctx context.Context, workerInstance string) ([]*Job, error) {
+	rows, err := s.pool.Query(ctx,
+		`UPDATE jobs SET status = $2, assigned_worker_id = NULL, updated_at = now()
+		 WHERE assigned_worker_id = $1 AND status IN ($3, $4)
+		 RETURNING `+jobColumns,
+		workerInstance, StatusPending, StatusScheduled, StatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("store: reclaim jobs: %w", err)
+	}
+	defer rows.Close()
+
+	jobs := []*Job{}
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// ListUnplaced returns pending jobs that have sat unplaced for at least
+// olderThan — placement retry candidates for the leader's sweep loop.
+func (s *Store) ListUnplaced(ctx context.Context, olderThan time.Duration, limit int) ([]*Job, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+jobColumns+` FROM jobs
+		 WHERE status = $1 AND updated_at < now() - make_interval(secs => $2)
+		 ORDER BY created_at ASC LIMIT $3`,
+		StatusPending, olderThan.Seconds(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: list unplaced: %w", err)
+	}
+	defer rows.Close()
+
+	jobs := []*Job{}
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
 func (s *Store) exec(ctx context.Context, sql string, args ...any) error {
 	tag, err := s.pool.Exec(ctx, sql, args...)
 	if err != nil {

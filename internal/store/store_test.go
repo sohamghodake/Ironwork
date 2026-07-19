@@ -105,6 +105,60 @@ func TestGetJobNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
+func TestReclaimJobs(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	running, err := s.CreateJob(ctx, "was-running", nil)
+	require.NoError(t, err)
+	require.NoError(t, s.MarkScheduled(ctx, running.ID, "worker-1"))
+	require.NoError(t, s.MarkRunning(ctx, running.ID))
+
+	done, err := s.CreateJob(ctx, "already-done", nil)
+	require.NoError(t, err)
+	require.NoError(t, s.MarkScheduled(ctx, done.ID, "worker-1"))
+	require.NoError(t, s.MarkFinished(ctx, done.ID, true, ""))
+
+	other, err := s.CreateJob(ctx, "other-worker", nil)
+	require.NoError(t, err)
+	require.NoError(t, s.MarkScheduled(ctx, other.ID, "worker-2"))
+
+	reclaimed, err := s.ReclaimJobs(ctx, "worker-1")
+	require.NoError(t, err)
+	require.Len(t, reclaimed, 1, "only in-flight jobs of the dead worker reclaim")
+	assert.Equal(t, running.ID, reclaimed[0].ID)
+	assert.Equal(t, store.StatusPending, reclaimed[0].Status)
+	assert.Empty(t, reclaimed[0].AssignedWorker)
+	assert.Equal(t, 1, reclaimed[0].Attempts, "attempts survive reclaim")
+
+	got, err := s.GetJob(ctx, done.ID)
+	require.NoError(t, err)
+	assert.Equal(t, store.StatusSucceeded, got.Status, "terminal jobs untouched")
+}
+
+func TestListUnplaced(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	stale, err := s.CreateJob(ctx, "stale-pending", nil)
+	require.NoError(t, err)
+	placed, err := s.CreateJob(ctx, "placed", nil)
+	require.NoError(t, err)
+	require.NoError(t, s.MarkScheduled(ctx, placed.ID, "worker-1"))
+
+	// Nothing is older than a minute yet.
+	jobs, err := s.ListUnplaced(ctx, time.Minute, 10)
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+
+	// With a zero threshold the stale pending job qualifies; the placed one
+	// never does.
+	jobs, err = s.ListUnplaced(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, stale.ID, jobs[0].ID)
+}
+
 func TestListJobsFilterAndOrder(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
