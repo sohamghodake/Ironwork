@@ -7,11 +7,13 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 3 complete — the hard milestone.** The three schedulers form
-> a Raft consensus group: only the elected leader places jobs, placement
-> decisions replicate through the Raft log to every node, and killing the
-> leader produces a visible re-election (~2s) while the job API stays up.
-> `GET /raft` shows each node's consensus view live.
+> **Status: Phase 4 complete.** Workers enforce backpressure (`ExecuteJob`
+> rejects at capacity; overflow jobs wait as `pending` and drain as slots
+> free) and heartbeat liveness+load to every scheduler. The Raft leader's
+> reaper detects crashed workers by dead heartbeats (~8s), reclaims their
+> in-flight jobs, and re-places them on live workers — kill a worker mid-job
+> and watch the job finish elsewhere with `attempts: 2`. `GET /workers`
+> shows the live worker table; `GET /raft` the consensus view.
 
 ## Quickstart
 
@@ -114,6 +116,39 @@ rejoins as a *follower* at the current term and its `applied_index` and
 all three FSMs. Raft state is durable: restart the whole cluster and the
 term and placement history carry over.
 
+## Backpressure & crash recovery (Phase 4)
+
+Workers execute at most `IRONWORK_CAPACITY` jobs (2 in compose) and reject
+overflow with `ResourceExhausted`; every 2s they heartbeat liveness and load
+to **all** schedulers, so each registry stays warm across leader failovers.
+The leader only offers jobs to live, non-full workers (most headroom first),
+and a leader-only *reaper* sweep (2s) retries `pending` jobs and reclaims
+in-flight jobs from workers whose heartbeats died (8s TTL) — bounded by 3
+execution attempts and a 60s placement budget for never-executed jobs.
+
+**See backpressure** — flood more work than the pool can hold:
+
+```sh
+for i in $(seq 7); do
+  curl -s -X POST localhost:8080/jobs -d '{"name":"flood","payload":{"duration_ms":6000}}' &
+done; wait
+curl -s localhost:8080/workers    # workers at 2/2, extras pending
+# ...seconds later the reaper drains the queue: all 7 succeeded
+```
+
+**See crash reassignment** — kill a worker mid-job:
+
+```sh
+curl -s -X POST localhost:8080/jobs -d '{"name":"victim","payload":{"duration_ms":30000}}'
+docker compose kill worker-1      # SIGKILL, no graceful drain
+watch -n1 "curl -s localhost:8080/jobs/<id>"
+```
+
+Timeline: ~8s of `running worker-1` (heartbeats aging), then the reaper logs
+`worker presumed dead; reclaiming jobs` and the job reappears as
+`running worker-2, attempts: 2`, finishing there. `GET /workers` shows
+`worker-1: alive=false` until its heartbeats resume.
+
 ## How the health check flows
 
 ```
@@ -164,7 +199,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 | **1 ✅** | One job through REST → gRPC → worker → Postgres (no scheduler in the middle) | job status transitions via API |
 | **2 ✅** | Scheduler service in the placement path (single instance) | placement in scheduler-1 logs |
 | **3 ✅** | **Raft across 3 schedulers** — election + failover (the hard milestone) | `GET /raft`: leader re-elected on kill, placement log identical on all nodes |
-| 4 | Worker backpressure + heartbeat crash detection & reassignment | on-screen reassignment |
+| **4 ✅** | Worker backpressure + heartbeat crash detection & reassignment | kill worker mid-job → job finishes elsewhere, `attempts: 2`; `GET /workers` liveness |
 | 5 | CRDT statemanager | divergence/reconvergence visualization |
 | 6 | Transactional outbox dispatch | — |
 | 7 | OTEL + Prometheus, frontend instrument panel | — |
