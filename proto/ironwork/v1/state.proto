@@ -24,6 +24,18 @@ message ClusterState {
   google.protobuf.Timestamp as_of = 4;
   // Raft consensus view of the reporting node (schedulers only, Phase 3+).
   RaftStatus raft = 5;
+  // Worker liveness/load as tracked by the reporting scheduler's heartbeat
+  // registry (Phase 4+).
+  repeated WorkerStatus workers = 6;
+}
+
+message WorkerStatus {
+  string instance = 1;
+  // False once heartbeats have gone stale past the dead TTL.
+  bool alive = 2;
+  double seconds_since_heartbeat = 3;
+  uint32 capacity = 4;
+  uint32 inflight = 5;
 }
 
 message RaftStatus {

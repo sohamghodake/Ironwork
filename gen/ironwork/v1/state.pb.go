@@ -110,7 +110,10 @@ type ClusterState struct {
 	JobCounts     *JobCounts             `protobuf:"bytes,3,opt,name=job_counts,json=jobCounts,proto3" json:"job_counts,omitempty"`
 	AsOf          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`
 	// Raft consensus view of the reporting node (schedulers only, Phase 3+).
-	Raft          *RaftStatus `protobuf:"bytes,5,opt,name=raft,proto3" json:"raft,omitempty"`
+	Raft *RaftStatus `protobuf:"bytes,5,opt,name=raft,proto3" json:"raft,omitempty"`
+	// Worker liveness/load as tracked by the reporting scheduler's heartbeat
+	// registry (Phase 4+).
+	Workers       []*WorkerStatus `protobuf:"bytes,6,rep,name=workers,proto3" json:"workers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -180,6 +183,90 @@ func (x *ClusterState) GetRaft() *RaftStatus {
 	return nil
 }
 
+func (x *ClusterState) GetWorkers() []*WorkerStatus {
+	if x != nil {
+		return x.Workers
+	}
+	return nil
+}
+
+type WorkerStatus struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Instance string                 `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
+	// False once heartbeats have gone stale past the dead TTL.
+	Alive                 bool    `protobuf:"varint,2,opt,name=alive,proto3" json:"alive,omitempty"`
+	SecondsSinceHeartbeat float64 `protobuf:"fixed64,3,opt,name=seconds_since_heartbeat,json=secondsSinceHeartbeat,proto3" json:"seconds_since_heartbeat,omitempty"`
+	Capacity              uint32  `protobuf:"varint,4,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	Inflight              uint32  `protobuf:"varint,5,opt,name=inflight,proto3" json:"inflight,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *WorkerStatus) Reset() {
+	*x = WorkerStatus{}
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkerStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkerStatus) ProtoMessage() {}
+
+func (x *WorkerStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkerStatus.ProtoReflect.Descriptor instead.
+func (*WorkerStatus) Descriptor() ([]byte, []int) {
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WorkerStatus) GetInstance() string {
+	if x != nil {
+		return x.Instance
+	}
+	return ""
+}
+
+func (x *WorkerStatus) GetAlive() bool {
+	if x != nil {
+		return x.Alive
+	}
+	return false
+}
+
+func (x *WorkerStatus) GetSecondsSinceHeartbeat() float64 {
+	if x != nil {
+		return x.SecondsSinceHeartbeat
+	}
+	return 0
+}
+
+func (x *WorkerStatus) GetCapacity() uint32 {
+	if x != nil {
+		return x.Capacity
+	}
+	return 0
+}
+
+func (x *WorkerStatus) GetInflight() uint32 {
+	if x != nil {
+		return x.Inflight
+	}
+	return 0
+}
+
 type RaftStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Raft role of the reporting node: Leader, Follower, or Candidate.
@@ -200,7 +287,7 @@ type RaftStatus struct {
 
 func (x *RaftStatus) Reset() {
 	*x = RaftStatus{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -212,7 +299,7 @@ func (x *RaftStatus) String() string {
 func (*RaftStatus) ProtoMessage() {}
 
 func (x *RaftStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[3]
+	mi := &file_ironwork_v1_state_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -225,7 +312,7 @@ func (x *RaftStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftStatus.ProtoReflect.Descriptor instead.
 func (*RaftStatus) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{3}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RaftStatus) GetState() string {
@@ -288,7 +375,7 @@ type PlacementRecord struct {
 
 func (x *PlacementRecord) Reset() {
 	*x = PlacementRecord{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -300,7 +387,7 @@ func (x *PlacementRecord) String() string {
 func (*PlacementRecord) ProtoMessage() {}
 
 func (x *PlacementRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[4]
+	mi := &file_ironwork_v1_state_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -313,7 +400,7 @@ func (x *PlacementRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementRecord.ProtoReflect.Descriptor instead.
 func (*PlacementRecord) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{4}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PlacementRecord) GetJobId() string {
@@ -349,7 +436,7 @@ type NodeInfo struct {
 
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -361,7 +448,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[5]
+	mi := &file_ironwork_v1_state_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -374,7 +461,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{5}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *NodeInfo) GetId() string {
@@ -411,7 +498,7 @@ type JobCounts struct {
 
 func (x *JobCounts) Reset() {
 	*x = JobCounts{}
-	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	mi := &file_ironwork_v1_state_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +510,7 @@ func (x *JobCounts) String() string {
 func (*JobCounts) ProtoMessage() {}
 
 func (x *JobCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_ironwork_v1_state_proto_msgTypes[6]
+	mi := &file_ironwork_v1_state_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +523,7 @@ func (x *JobCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobCounts.ProtoReflect.Descriptor instead.
 func (*JobCounts) Descriptor() ([]byte, []int) {
-	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{6}
+	return file_ironwork_v1_state_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *JobCounts) GetPending() uint64 {
@@ -481,14 +568,21 @@ const file_ironwork_v1_state_proto_rawDesc = "" +
 	"\x17ironwork/v1/state.proto\x12\vironwork.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x18\n" +
 	"\x16GetClusterStateRequest\"J\n" +
 	"\x17GetClusterStateResponse\x12/\n" +
-	"\x05state\x18\x01 \x01(\v2\x19.ironwork.v1.ClusterStateR\x05state\"\xf7\x01\n" +
+	"\x05state\x18\x01 \x01(\v2\x19.ironwork.v1.ClusterStateR\x05state\"\xac\x02\n" +
 	"\fClusterState\x12%\n" +
 	"\x0ereporting_node\x18\x01 \x01(\tR\rreportingNode\x12+\n" +
 	"\x05nodes\x18\x02 \x03(\v2\x15.ironwork.v1.NodeInfoR\x05nodes\x125\n" +
 	"\n" +
 	"job_counts\x18\x03 \x01(\v2\x16.ironwork.v1.JobCountsR\tjobCounts\x12/\n" +
 	"\x05as_of\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04asOf\x12+\n" +
-	"\x04raft\x18\x05 \x01(\v2\x17.ironwork.v1.RaftStatusR\x04raft\"\xff\x01\n" +
+	"\x04raft\x18\x05 \x01(\v2\x17.ironwork.v1.RaftStatusR\x04raft\x123\n" +
+	"\aworkers\x18\x06 \x03(\v2\x19.ironwork.v1.WorkerStatusR\aworkers\"\xb0\x01\n" +
+	"\fWorkerStatus\x12\x1a\n" +
+	"\binstance\x18\x01 \x01(\tR\binstance\x12\x14\n" +
+	"\x05alive\x18\x02 \x01(\bR\x05alive\x126\n" +
+	"\x17seconds_since_heartbeat\x18\x03 \x01(\x01R\x15secondsSinceHeartbeat\x12\x1a\n" +
+	"\bcapacity\x18\x04 \x01(\rR\bcapacity\x12\x1a\n" +
+	"\binflight\x18\x05 \x01(\rR\binflight\"\xff\x01\n" +
 	"\n" +
 	"RaftStatus\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x1b\n" +
@@ -529,32 +623,34 @@ func file_ironwork_v1_state_proto_rawDescGZIP() []byte {
 	return file_ironwork_v1_state_proto_rawDescData
 }
 
-var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_ironwork_v1_state_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_ironwork_v1_state_proto_goTypes = []any{
 	(*GetClusterStateRequest)(nil),  // 0: ironwork.v1.GetClusterStateRequest
 	(*GetClusterStateResponse)(nil), // 1: ironwork.v1.GetClusterStateResponse
 	(*ClusterState)(nil),            // 2: ironwork.v1.ClusterState
-	(*RaftStatus)(nil),              // 3: ironwork.v1.RaftStatus
-	(*PlacementRecord)(nil),         // 4: ironwork.v1.PlacementRecord
-	(*NodeInfo)(nil),                // 5: ironwork.v1.NodeInfo
-	(*JobCounts)(nil),               // 6: ironwork.v1.JobCounts
-	(*timestamppb.Timestamp)(nil),   // 7: google.protobuf.Timestamp
+	(*WorkerStatus)(nil),            // 3: ironwork.v1.WorkerStatus
+	(*RaftStatus)(nil),              // 4: ironwork.v1.RaftStatus
+	(*PlacementRecord)(nil),         // 5: ironwork.v1.PlacementRecord
+	(*NodeInfo)(nil),                // 6: ironwork.v1.NodeInfo
+	(*JobCounts)(nil),               // 7: ironwork.v1.JobCounts
+	(*timestamppb.Timestamp)(nil),   // 8: google.protobuf.Timestamp
 }
 var file_ironwork_v1_state_proto_depIdxs = []int32{
 	2, // 0: ironwork.v1.GetClusterStateResponse.state:type_name -> ironwork.v1.ClusterState
-	5, // 1: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
-	6, // 2: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
-	7, // 3: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
-	3, // 4: ironwork.v1.ClusterState.raft:type_name -> ironwork.v1.RaftStatus
-	4, // 5: ironwork.v1.RaftStatus.recent_placements:type_name -> ironwork.v1.PlacementRecord
-	7, // 6: ironwork.v1.PlacementRecord.at:type_name -> google.protobuf.Timestamp
-	0, // 7: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
-	1, // 8: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
-	8, // [8:9] is the sub-list for method output_type
-	7, // [7:8] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	6, // 1: ironwork.v1.ClusterState.nodes:type_name -> ironwork.v1.NodeInfo
+	7, // 2: ironwork.v1.ClusterState.job_counts:type_name -> ironwork.v1.JobCounts
+	8, // 3: ironwork.v1.ClusterState.as_of:type_name -> google.protobuf.Timestamp
+	4, // 4: ironwork.v1.ClusterState.raft:type_name -> ironwork.v1.RaftStatus
+	3, // 5: ironwork.v1.ClusterState.workers:type_name -> ironwork.v1.WorkerStatus
+	5, // 6: ironwork.v1.RaftStatus.recent_placements:type_name -> ironwork.v1.PlacementRecord
+	8, // 7: ironwork.v1.PlacementRecord.at:type_name -> google.protobuf.Timestamp
+	0, // 8: ironwork.v1.StateService.GetClusterState:input_type -> ironwork.v1.GetClusterStateRequest
+	1, // 9: ironwork.v1.StateService.GetClusterState:output_type -> ironwork.v1.GetClusterStateResponse
+	9, // [9:10] is the sub-list for method output_type
+	8, // [8:9] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_ironwork_v1_state_proto_init() }
@@ -568,7 +664,7 @@ func file_ironwork_v1_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ironwork_v1_state_proto_rawDesc), len(file_ironwork_v1_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
