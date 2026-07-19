@@ -217,6 +217,29 @@ func TestRaftEndpointNoMajorityDuringElection(t *testing.T) {
 	assert.Equal(t, "", body["leader"])
 }
 
+func TestWorkersEndpointReportsRegistryViews(t *testing.T) {
+	h := gatewayhttp.NewRouter(gatewayhttp.Deps{
+		Health: &fakeHealthClient{}, Jobs: &fakeJobsClient{}, Log: zerolog.Nop(),
+		Raft: &fakeRaft{nodes: []leaderclient.NodeStatus{
+			{Name: "scheduler-1", Reachable: true, Workers: []leaderclient.WorkerView{
+				{Instance: "worker-1", Alive: true, Capacity: 2, Inflight: 2},
+				{Instance: "worker-2", Alive: false, SecondsSinceHeartbeat: 9.5, Capacity: 2},
+			}},
+			{Name: "scheduler-2", Reachable: false, Error: "stopped"},
+		}},
+	})
+
+	rec, body := doJSON(t, h, http.MethodGet, "/workers", "")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	nodes := body["nodes"].([]any)
+	require.Len(t, nodes, 2)
+	first := nodes[0].(map[string]any)
+	workers := first["workers"].([]any)
+	require.Len(t, workers, 2)
+	assert.Equal(t, false, workers[1].(map[string]any)["alive"])
+}
+
 // --- health ---
 
 func getHealth(t *testing.T, client ironworkv1.HealthServiceClient, path string) *httptest.ResponseRecorder {

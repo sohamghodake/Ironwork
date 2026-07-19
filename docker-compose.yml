@@ -137,7 +137,8 @@ services:
       <<: *tls-env
       IRONWORK_INSTANCE: worker-1
       IRONWORK_DB_DSN: *db-dsn
-      IRONWORK_CAPACITY: "4"
+      IRONWORK_CAPACITY: "2"
+      IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -149,7 +150,8 @@ services:
       <<: *tls-env
       IRONWORK_INSTANCE: worker-2
       IRONWORK_DB_DSN: *db-dsn
-      IRONWORK_CAPACITY: "4"
+      IRONWORK_CAPACITY: "2"
+      IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
     depends_on:
       worker-1:
         condition: service_started

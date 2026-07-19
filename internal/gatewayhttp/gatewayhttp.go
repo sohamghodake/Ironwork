@@ -109,6 +109,7 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Get("/health", d.handleHealth)
 	r.Get("/raft", d.handleRaft)
+	r.Get("/workers", d.handleWorkers)
 
 	r.Route("/jobs", func(r chi.Router) {
 		r.Post("/", d.handleCreateJob)
@@ -240,6 +241,27 @@ func (d Deps) handleRaft(w http.ResponseWriter, req *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"leader": leader, "nodes": nodes})
+}
+
+// handleWorkers reports each scheduler's heartbeat view of the worker pool —
+// liveness, capacity, and inflight load (the backpressure signal) side by
+// side across all registries.
+func (d Deps) handleWorkers(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), clusterCheckTimeout)
+	defer cancel()
+
+	type nodeWorkers struct {
+		Name      string                    `json:"name"`
+		Reachable bool                      `json:"reachable"`
+		Error     string                    `json:"error,omitempty"`
+		Workers   []leaderclient.WorkerView `json:"workers"`
+	}
+	nodes := d.Raft.RaftStatus(ctx)
+	out := make([]nodeWorkers, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, nodeWorkers{Name: n.Name, Reachable: n.Reachable, Error: n.Error, Workers: n.Workers})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": out})
 }
 
 // healthResponse is the JSON shape of GET /health.

@@ -159,15 +159,25 @@ func (r *Router) ListJobs(ctx context.Context, in *ironworkv1.ListJobsRequest, o
 
 // NodeStatus is one scheduler's consensus view (or its unreachability).
 type NodeStatus struct {
-	Name         string      `json:"name"`
-	Reachable    bool        `json:"reachable"`
-	Error        string      `json:"error,omitempty"`
-	State        string      `json:"state,omitempty"`
-	LeaderID     string      `json:"leader_id,omitempty"`
-	Term         uint64      `json:"term,omitempty"`
-	LastLogIndex uint64      `json:"last_log_index,omitempty"`
-	AppliedIndex uint64      `json:"applied_index,omitempty"`
-	Placements   []Placement `json:"recent_placements,omitempty"`
+	Name         string       `json:"name"`
+	Reachable    bool         `json:"reachable"`
+	Error        string       `json:"error,omitempty"`
+	State        string       `json:"state,omitempty"`
+	LeaderID     string       `json:"leader_id,omitempty"`
+	Term         uint64       `json:"term,omitempty"`
+	LastLogIndex uint64       `json:"last_log_index,omitempty"`
+	AppliedIndex uint64       `json:"applied_index,omitempty"`
+	Placements   []Placement  `json:"recent_placements,omitempty"`
+	Workers      []WorkerView `json:"workers,omitempty"`
+}
+
+// WorkerView is one worker's liveness/load as a scheduler's registry sees it.
+type WorkerView struct {
+	Instance              string  `json:"instance"`
+	Alive                 bool    `json:"alive"`
+	SecondsSinceHeartbeat float64 `json:"seconds_since_heartbeat"`
+	Capacity              uint32  `json:"capacity"`
+	Inflight              uint32  `json:"inflight"`
 }
 
 // Placement is one replicated placement decision as reported by a node.
@@ -209,6 +219,15 @@ func (r *Router) RaftStatus(ctx context.Context) []NodeStatus {
 					JobID:  p.JobId,
 					Worker: p.Worker,
 					At:     p.At.AsTime(),
+				})
+			}
+			for _, w := range resp.State.GetWorkers() {
+				ns.Workers = append(ns.Workers, WorkerView{
+					Instance:              w.Instance,
+					Alive:                 w.Alive,
+					SecondsSinceHeartbeat: w.SecondsSinceHeartbeat,
+					Capacity:              w.Capacity,
+					Inflight:              w.Inflight,
 				})
 			}
 			out[i] = ns
