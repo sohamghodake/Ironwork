@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
+	"github.com/sohamghodake/ironwork/internal/crdtview"
 	"github.com/sohamghodake/ironwork/internal/gatewayhttp"
 	"github.com/sohamghodake/ironwork/internal/leaderclient"
 )
@@ -238,6 +239,52 @@ func TestWorkersEndpointReportsRegistryViews(t *testing.T) {
 	workers := first["workers"].([]any)
 	require.Len(t, workers, 2)
 	assert.Equal(t, false, workers[1].(map[string]any)["alive"])
+}
+
+// --- crdt view ---
+
+type fakeCRDT struct {
+	view       crdtview.View
+	gossipSets []bool
+	err        error
+}
+
+func (f *fakeCRDT) Fetch(context.Context) crdtview.View { return f.view }
+func (f *fakeCRDT) SetGossip(_ context.Context, enabled bool) error {
+	f.gossipSets = append(f.gossipSets, enabled)
+	return f.err
+}
+
+func TestCRDTStateAndPartitionControls(t *testing.T) {
+	crdt := &fakeCRDT{view: crdtview.View{
+		Converged: false,
+		Replicas: []crdtview.ReplicaView{
+			{Name: "statemanager-1", Reachable: true, GossipEnabled: false,
+				ByStatus: map[string]crdtview.CounterView{"succeeded": {Total: 4, Shards: map[string]uint64{"statemanager-1": 4}}}},
+			{Name: "statemanager-2", Reachable: true, GossipEnabled: false},
+		},
+	}}
+	h := gatewayhttp.NewRouter(gatewayhttp.Deps{
+		Health: &fakeHealthClient{}, Jobs: &fakeJobsClient{}, CRDT: crdt, Log: zerolog.Nop(),
+	})
+
+	rec, body := doJSON(t, h, http.MethodGet, "/crdt/state", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, false, body["converged"])
+	assert.Len(t, body["replicas"], 2)
+
+	rec, _ = doJSON(t, h, http.MethodPost, "/crdt/partition", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	rec, _ = doJSON(t, h, http.MethodPost, "/crdt/heal", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, []bool{false, true}, crdt.gossipSets)
+
+	// The dashboard itself is served inline.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/crdt", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), "CRDT convergence")
 }
 
 // --- health ---

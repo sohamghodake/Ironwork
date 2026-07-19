@@ -12,7 +12,7 @@ mkdir -p certs
 mkcert -client \
   -cert-file certs/service.pem \
   -key-file certs/service-key.pem \
-  gateway observer statemanager \
+  gateway observer statemanager-1 statemanager-2 \
   scheduler-1 scheduler-2 scheduler-3 \
   worker-1 worker-2 \
   localhost 127.0.0.1 ::1

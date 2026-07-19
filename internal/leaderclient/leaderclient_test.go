@@ -2,6 +2,7 @@ package leaderclient
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -121,6 +122,22 @@ type fakeStates struct {
 
 func (f *fakeStates) GetClusterState(context.Context, *ironworkv1.GetClusterStateRequest, ...grpc.CallOption) (*ironworkv1.GetClusterStateResponse, error) {
 	return f.resp, f.err
+}
+
+func (f *fakeStates) ReportJobEvent(context.Context, *ironworkv1.ReportJobEventRequest, ...grpc.CallOption) (*ironworkv1.ReportJobEventResponse, error) {
+	return nil, errors.New("not used")
+}
+
+func (f *fakeStates) SyncState(context.Context, *ironworkv1.SyncStateRequest, ...grpc.CallOption) (*ironworkv1.SyncStateResponse, error) {
+	return nil, errors.New("not used")
+}
+
+func (f *fakeStates) GetCRDTState(context.Context, *ironworkv1.GetCRDTStateRequest, ...grpc.CallOption) (*ironworkv1.GetCRDTStateResponse, error) {
+	return nil, errors.New("not used")
+}
+
+func (f *fakeStates) SetGossip(context.Context, *ironworkv1.SetGossipRequest, ...grpc.CallOption) (*ironworkv1.SetGossipResponse, error) {
+	return nil, errors.New("not used")
 }
 
 func TestRaftStatusFanOut(t *testing.T) {
