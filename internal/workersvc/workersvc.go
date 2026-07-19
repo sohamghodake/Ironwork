@@ -34,6 +34,12 @@ type JobStore interface {
 	MarkFinished(ctx context.Context, id string, succeeded bool, errMsg string) error
 }
 
+// Reporter forwards terminal job outcomes to the statemanager's
+// eventually-consistent statistics view. May be nil (reporting disabled).
+type Reporter interface {
+	ReportJobEvent(ctx context.Context, jobID, worker string, succeeded bool)
+}
+
 // payload is the Phase 1 stub job contract.
 type payload struct {
 	DurationMS int  `json:"duration_ms"`
@@ -45,6 +51,7 @@ type Server struct {
 	ironworkv1.UnimplementedWorkerServiceServer
 
 	store     JobStore
+	reporter  Reporter
 	instance  string
 	capacity  int32
 	inflightN atomic.Int32
@@ -53,12 +60,14 @@ type Server struct {
 }
 
 // New builds a worker service executing at most capacity jobs concurrently.
-func New(instance string, st JobStore, capacity int, log zerolog.Logger) *Server {
+// reporter may be nil.
+func New(instance string, st JobStore, capacity int, reporter Reporter, log zerolog.Logger) *Server {
 	if capacity < 1 {
 		capacity = 1
 	}
 	return &Server{
 		store:    st,
+		reporter: reporter,
 		instance: instance,
 		capacity: int32(capacity), //nolint:gosec // capacity is a small config value
 		log:      log,
@@ -129,6 +138,9 @@ func (s *Server) run(jobID string, rawPayload []byte) {
 	if err := s.store.MarkFinished(ctx, jobID, succeeded, errMsg); err != nil {
 		s.log.Error().Err(err).Str("job_id", jobID).Msg("mark finished")
 		return
+	}
+	if s.reporter != nil {
+		s.reporter.ReportJobEvent(ctx, jobID, s.instance, succeeded)
 	}
 	s.log.Info().Str("job_id", jobID).Bool("succeeded", succeeded).Msg("job finished")
 }
