@@ -132,7 +132,13 @@ func (s *Store) MarkFinished(ctx context.Context, id string, succeeded bool, err
 // the assignment) and reports the reclaimed rows so the caller can re-place
 // or fail them.
 func (s *Store) ReclaimJobs(ctx context.Context, workerInstance string) ([]*Job, error) {
-	rows, err := s.pool.Query(ctx,
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := tx.Query(ctx,
 		`UPDATE jobs SET status = $2, assigned_worker_id = NULL, updated_at = now()
 		 WHERE assigned_worker_id = $1 AND status IN ($3, $4)
 		 RETURNING `+jobColumns,
@@ -140,17 +146,32 @@ func (s *Store) ReclaimJobs(ctx context.Context, workerInstance string) ([]*Job,
 	if err != nil {
 		return nil, fmt.Errorf("store: reclaim jobs: %w", err)
 	}
-	defer rows.Close()
 
 	jobs := []*Job{}
 	for rows.Next() {
 		j, err := scanJob(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		jobs = append(jobs, j)
 	}
-	return jobs, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Re-enqueue each reclaimed job for dispatch in the same transaction, so
+	// a crash mid-reclaim never loses the intent to re-place it.
+	for _, j := range jobs {
+		if err := enqueueOutbox(ctx, tx, j.ID); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("store: commit: %w", err)
+	}
+	return jobs, nil
 }
 
 // ListUnplaced returns pending jobs that have sat unplaced for at least
