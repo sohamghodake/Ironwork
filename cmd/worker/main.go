@@ -18,6 +18,7 @@ import (
 	"github.com/sohamghodake/ironwork/internal/app"
 	"github.com/sohamghodake/ironwork/internal/healthsvc"
 	"github.com/sohamghodake/ironwork/internal/heartbeat"
+	"github.com/sohamghodake/ironwork/internal/statereport"
 	"github.com/sohamghodake/ironwork/internal/store"
 	"github.com/sohamghodake/ironwork/internal/tlsutil"
 	"github.com/sohamghodake/ironwork/internal/workersvc"
@@ -43,7 +44,14 @@ func main() {
 	}
 	defer pool.Close()
 
-	svc := workersvc.New(cfg.Instance, store.New(pool), cfg.Capacity, log)
+	// Outcome reports feed this worker's designated statemanager replica.
+	reporter, err := statereport.New(cfg.StatemanagerAddr, clientTLS, log)
+	if err != nil {
+		log.Fatal().Err(err).Msg("build statemanager reporter")
+	}
+	defer reporter.Close()
+
+	svc := workersvc.New(cfg.Instance, store.New(pool), cfg.Capacity, reporter, log)
 
 	hb, err := heartbeat.New(heartbeat.Config{
 		Instance:   cfg.Instance,

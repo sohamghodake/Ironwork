@@ -17,6 +17,7 @@ import (
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
 	"github.com/sohamghodake/ironwork/internal/app"
+	"github.com/sohamghodake/ironwork/internal/crdtview"
 	"github.com/sohamghodake/ironwork/internal/gatewayhttp"
 	"github.com/sohamghodake/ironwork/internal/leaderclient"
 	"github.com/sohamghodake/ironwork/internal/tlsutil"
@@ -43,12 +44,19 @@ func main() {
 	}
 	defer router.Close()
 
+	crdt, err := crdtview.New(cfg.Statemanagers, clientTLS, log)
+	if err != nil {
+		log.Fatal().Err(err).Msg("create statemanager view")
+	}
+	defer crdt.Close()
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: gatewayhttp.NewRouter(gatewayhttp.Deps{
 			Health: ironworkv1.NewHealthServiceClient(obsConn),
 			Jobs:   router,
 			Raft:   router,
+			CRDT:   crdt,
 			Log:    log,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

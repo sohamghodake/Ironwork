@@ -138,6 +138,7 @@ services:
       IRONWORK_INSTANCE: worker-1
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_CAPACITY: "2"
+      IRONWORK_STATEMANAGER_ADDR: statemanager-1:9443
       IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
     depends_on:
       migrate:
@@ -151,6 +152,7 @@ services:
       IRONWORK_INSTANCE: worker-2
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_CAPACITY: "2"
+      IRONWORK_STATEMANAGER_ADDR: statemanager-2:9443
       IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
     depends_on:
       worker-1:
@@ -158,7 +160,10 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  statemanager:
+  # Two CRDT statemanager replicas: workers report outcomes to their own
+  # replica; replicas converge by push-pull gossip (partition it from the
+  # dashboard at localhost:8080/crdt).
+  statemanager-1:
     <<: *service
     build:
       context: .
@@ -166,7 +171,19 @@ services:
     image: ironwork-statemanager
     environment:
       <<: *tls-env
-      IRONWORK_INSTANCE: statemanager
+      IRONWORK_INSTANCE: statemanager-1
+      IRONWORK_STATEMANAGERS: statemanager-1=statemanager-1:9443,statemanager-2=statemanager-2:9443
+
+  statemanager-2:
+    <<: *service
+    image: ironwork-statemanager
+    environment:
+      <<: *tls-env
+      IRONWORK_INSTANCE: statemanager-2
+      IRONWORK_STATEMANAGERS: statemanager-1=statemanager-1:9443,statemanager-2=statemanager-2:9443
+    depends_on:
+      statemanager-1:
+        condition: service_started
 
   observer:
     <<: *service
@@ -179,7 +196,7 @@ services:
       IRONWORK_INSTANCE: observer
       IRONWORK_DB_DSN: *db-dsn
       IRONWORK_TARGETS: >-
-        scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443,worker-1=worker-1:9443,worker-2=worker-2:9443,statemanager=statemanager:9443
+        scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443,worker-1=worker-1:9443,worker-2=worker-2:9443,statemanager-1=statemanager-1:9443,statemanager-2=statemanager-2:9443
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -195,6 +212,7 @@ services:
       IRONWORK_INSTANCE: gateway
       IRONWORK_OBSERVER_ADDR: observer:9443
       IRONWORK_SCHEDULERS: scheduler-1=scheduler-1:9443,scheduler-2=scheduler-2:9443,scheduler-3=scheduler-3:9443
+      IRONWORK_STATEMANAGERS: statemanager-1=statemanager-1:9443,statemanager-2=statemanager-2:9443
     ports:
       - "8080:8080"
     depends_on:

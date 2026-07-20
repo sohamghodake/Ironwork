@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ironwork — CRDT convergence</title>
+<style>
+  /* Dark instrument panel. Series + status colors validated against the
+     dark surface (#1a1a19) with the palette validator. */
+  :root {
+    color-scheme: dark;
+    --surface: #1a1a19; --panel: #232321; --line: #3a3936;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8a897f;
+    --sm1: #3987e5; --sm2: #008300;          /* categorical slots 1–2 (dark) */
+    --good: #0ca30c; --serious: #ec835a;     /* status: reserved */
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--surface); color: var(--ink); font: 14px/1.45 ui-monospace, "Cascadia Mono", Menlo, monospace; padding: 24px; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; }
+  h1 span { color: var(--ink-3); font-weight: 400; }
+  #banner { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 999px; font-weight: 600; border: 1px solid var(--line); }
+  #banner.converged { color: var(--good); border-color: var(--good); }
+  #banner.diverged  { color: var(--serious); border-color: var(--serious); }
+  #banner.degraded  { color: var(--ink-2); }
+  .controls { margin-left: auto; display: flex; gap: 8px; }
+  button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--ink-3); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .legend { display: flex; gap: 16px; color: var(--ink-2); font-size: 12px; margin-bottom: 16px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  section h2 { font-size: 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .gossip { font-size: 11px; color: var(--ink-3); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  .gossip.off { color: var(--serious); border-color: var(--serious); }
+  .unreachable { color: var(--ink-3); font-style: italic; }
+  h3 { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; margin: 14px 0 6px; }
+  .row { display: grid; grid-template-columns: 88px 1fr 40px; align-items: center; gap: 10px; margin: 6px 0; }
+  .row .k { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+  .row .v { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { display: flex; height: 12px; }
+  .bar i { display: block; height: 100%; }
+  .bar i + i { margin-left: 2px; }             /* 2px surface gap between segments */
+  .bar i:last-child { border-radius: 0 4px 4px 0; }  /* rounded data end */
+  .bar i:first-child { border-radius: 2px 0 0 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td { padding: 3px 6px 3px 0; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+  td.st b { font-weight: 600; color: var(--ink); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  footer { margin-top: 14px; color: var(--ink-3); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>IRONWORK <span>· CRDT convergence</span></h1>
+  <div id="banner" class="degraded">● LOADING</div>
+  <div class="controls">
+    <button id="jobs">Submit 5 jobs</button>
+    <button id="partition">Partition</button>
+    <button id="heal">Heal</button>
+  </div>
+</header>
+<div class="legend" id="legend"></div>
+<main id="panels"></main>
+<footer>Counters are G-Counters: each replica increments only its own shard; merge = pointwise max.
+Partition disables gossip while both replicas keep ingesting — watch the shards drift apart, then heal.</footer>
+
+<script>
+const seriesColors = ["var(--sm1)", "var(--sm2)"];
+let replicaSlots = {};   // replica id -> color, fixed by sorted first sight
+
+function slot(replica) {
+  if (!(replica in replicaSlots)) {
+    const known = Object.keys(replicaSlots).concat(replica).sort();
+    replicaSlots = {};
+    known.forEach((r, i) => { replicaSlots[r] = seriesColors[i % seriesColors.length]; });
+  }
+  return replicaSlots[replica];
+}
+
+function counterRows(counters, maxTotal) {
+  const keys = Object.keys(counters || {}).sort();
+  if (!keys.length) return '<div class="row"><span class="k">—</span><span></span><span class="v">0</span></div>';
+  return keys.map(k => {
+    const c = counters[k];
+    const shards = Object.keys(c.shards || {}).sort();
+    const segs = shards.map(r =>
+      `<i style="width:${maxTotal ? (100 * (c.shards[r] || 0) / maxTotal) : 0}%;background:${slot(r)}" title="${r}: ${c.shards[r]}"></i>`
+    ).join("");
+    return `<div class="row"><span class="k" title="${k}">${k}</span><span class="bar">${segs}</span><span class="v">${c.total}</span></div>`;
+  }).join("");
+}
+
+function recentRows(recent) {
+  return (recent || []).slice(0, 8).map(e => {
+    const ok = e.status === "succeeded";
+    return `<tr><td class="st"><span class="dot" style="background:${ok ? "var(--good)" : "var(--serious)"}"></span><b>${ok ? "✓" : "✗"} ${e.status}</b></td>` +
+      `<td title="${e.job_id}">${e.job_id.slice(0, 8)}</td><td>${e.worker}</td><td>via ${e.replica}</td></tr>`;
+  }).join("") || '<tr><td class="unreachable">no events yet</td></tr>';
+}
+
+function render(view) {
+  const banner = document.getElementById("banner");
+  const unreachable = view.replicas.some(r => !r.reachable);
+  if (unreachable) { banner.className = "degraded"; banner.textContent = "● REPLICA UNREACHABLE"; }
+  else if (view.converged) { banner.className = "converged"; banner.textContent = "✓ CONVERGED"; }
+  else { banner.className = "diverged"; banner.textContent = "⚠ DIVERGED"; }
+
+  // Shared scale across panels so equal counters render equal bars.
+  let maxTotal = 0;
+  for (const r of view.replicas) {
+    for (const m of [r.by_status, r.by_worker]) {
+      for (const k in (m || {})) maxTotal = Math.max(maxTotal, m[k].total);
+    }
+  }
+
+  document.getElementById("panels").innerHTML = view.replicas.map(r => {
+    if (!r.reachable) {
+      return `<section><h2>${r.name}</h2><p class="unreachable">unreachable: ${r.error || ""}</p></section>`;
+    }
+    return `<section>
+      <h2><i class="dot" style="background:${slot(r.name)}"></i>${r.name}
+        <span class="gossip ${r.gossip_enabled ? "" : "off"}">gossip ${r.gossip_enabled ? "on" : "OFF"}</span></h2>
+      <h3>Jobs by status</h3>${counterRows(r.by_status, maxTotal)}
+      <h3>Jobs by worker</h3>${counterRows(r.by_worker, maxTotal)}
+      <h3>Recent outcomes (LWW)</h3><table>${recentRows(r.recent)}</table>
+    </section>`;
+  }).join("");
+
+  document.getElementById("legend").innerHTML =
+    Object.keys(replicaSlots).sort().map(r => `<span><i style="background:${replicaSlots[r]}"></i>${r} shard</span>`).join("");
+}
+
+async function poll() {
+  try {
+    const resp = await fetch("/crdt/state");
+    render(await resp.json());
+  } catch (e) { /* gateway briefly away; keep polling */ }
+}
+
+async function act(button, path, body) {
+  button.disabled = true;
+  try { await fetch(path, { method: "POST", body: body || "" }); } catch (e) {}
+  button.disabled = false;
+  poll();
+}
+
+document.getElementById("partition").onclick = e => act(e.target, "/crdt/partition");
+document.getElementById("heal").onclick = e => act(e.target, "/crdt/heal");
+document.getElementById("jobs").onclick = async e => {
+  e.target.disabled = true;
+  for (let i = 0; i < 5; i++) {
+    try { await fetch("/jobs", { method: "POST", body: '{"name":"viz-demo","payload":{"duration_ms":700}}' }); } catch (err) {}
+  }
+  e.target.disabled = false;
+};
+
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

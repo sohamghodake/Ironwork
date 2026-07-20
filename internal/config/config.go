@@ -34,6 +34,12 @@ type Config struct {
 	RaftPeers map[string]string
 	// RaftDataDir holds the raft log, stable store, and snapshots (scheduler).
 	RaftDataDir string
+	// Statemanagers maps instance name -> gRPC address of every statemanager
+	// replica: gossip peers for statemanagers, dashboard fan-out for the
+	// gateway.
+	Statemanagers map[string]string
+	// StatemanagerAddr is the replica this worker reports job outcomes to.
+	StatemanagerAddr string
 	// Targets maps instance name -> gRPC address for observer fan-out checks,
 	// parsed from "name=addr,name=addr" form.
 	Targets map[string]string
@@ -71,6 +77,8 @@ func Load(component string) (*Config, error) {
 	v.SetDefault("raft_addr", ":9444")
 	v.SetDefault("raft_peers", "scheduler-1=scheduler-1:9444,scheduler-2=scheduler-2:9444,scheduler-3=scheduler-3:9444")
 	v.SetDefault("raft_data_dir", "raft-data")
+	v.SetDefault("statemanagers", "statemanager-1=statemanager-1:9443,statemanager-2=statemanager-2:9443")
+	v.SetDefault("statemanager_addr", "statemanager-1:9443")
 	v.SetDefault("targets", "")
 	v.SetDefault("workers", "")
 	v.SetDefault("capacity", 4)
@@ -95,22 +103,28 @@ func Load(component string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: invalid IRONWORK_RAFT_PEERS: %w", err)
 	}
+	statemanagers, err := parseTargets(v.GetString("statemanagers"))
+	if err != nil {
+		return nil, fmt.Errorf("config: invalid IRONWORK_STATEMANAGERS: %w", err)
+	}
 
 	return &Config{
-		Component:    component,
-		Instance:     v.GetString("instance"),
-		HTTPAddr:     v.GetString("http_addr"),
-		GRPCAddr:     v.GetString("grpc_addr"),
-		DBDSN:        v.GetString("db_dsn"),
-		ObserverAddr: v.GetString("observer_addr"),
-		Schedulers:   schedulers,
-		RaftAddr:     v.GetString("raft_addr"),
-		RaftPeers:    raftPeers,
-		RaftDataDir:  v.GetString("raft_data_dir"),
-		Targets:      targets,
-		Workers:      workers,
-		Capacity:     v.GetInt("capacity"),
-		LogLevel:     v.GetString("log_level"),
+		Component:        component,
+		Instance:         v.GetString("instance"),
+		HTTPAddr:         v.GetString("http_addr"),
+		GRPCAddr:         v.GetString("grpc_addr"),
+		DBDSN:            v.GetString("db_dsn"),
+		ObserverAddr:     v.GetString("observer_addr"),
+		Schedulers:       schedulers,
+		RaftAddr:         v.GetString("raft_addr"),
+		RaftPeers:        raftPeers,
+		RaftDataDir:      v.GetString("raft_data_dir"),
+		Statemanagers:    statemanagers,
+		StatemanagerAddr: v.GetString("statemanager_addr"),
+		Targets:          targets,
+		Workers:          workers,
+		Capacity:         v.GetInt("capacity"),
+		LogLevel:         v.GetString("log_level"),
 		TLS: TLSPaths{
 			CertFile: v.GetString("tls.cert_file"),
 			KeyFile:  v.GetString("tls.key_file"),

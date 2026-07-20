@@ -6,6 +6,7 @@ package gatewayhttp
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -18,10 +19,16 @@ import (
 	"google.golang.org/grpc/status"
 
 	ironworkv1 "github.com/sohamghodake/ironwork/gen/ironwork/v1"
+	"github.com/sohamghodake/ironwork/internal/crdtview"
 	"github.com/sohamghodake/ironwork/internal/leaderclient"
 	"github.com/sohamghodake/ironwork/internal/protoconv"
 	"github.com/sohamghodake/ironwork/internal/store"
 )
+
+// dashboardHTML is the self-contained CRDT convergence dashboard.
+//
+//go:embed dashboard.html
+var dashboardHTML []byte
 
 // clusterCheckTimeout bounds the observer round trip; the observer's own
 // per-target timeout is shorter, so a healthy observer always answers in time.
@@ -44,11 +51,19 @@ type RaftStatusProvider interface {
 	RaftStatus(ctx context.Context) []leaderclient.NodeStatus
 }
 
+// CRDTView aggregates the statemanager replicas' CRDT state and proxies the
+// partition/heal controls.
+type CRDTView interface {
+	Fetch(ctx context.Context) crdtview.View
+	SetGossip(ctx context.Context, enabled bool) error
+}
+
 // Deps wires the router's collaborators.
 type Deps struct {
 	Health ironworkv1.HealthServiceClient
 	Jobs   ironworkv1.JobServiceClient
 	Raft   RaftStatusProvider
+	CRDT   CRDTView
 	Log    zerolog.Logger
 }
 
@@ -110,6 +125,15 @@ func NewRouter(d Deps) http.Handler {
 	r.Get("/health", d.handleHealth)
 	r.Get("/raft", d.handleRaft)
 	r.Get("/workers", d.handleWorkers)
+
+	// CRDT convergence: dashboard, state feed, and partition controls.
+	r.Get("/crdt", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(dashboardHTML)
+	})
+	r.Get("/crdt/state", d.handleCRDTState)
+	r.Post("/crdt/partition", d.handleSetGossip(false))
+	r.Post("/crdt/heal", d.handleSetGossip(true))
 
 	r.Route("/jobs", func(r chi.Router) {
 		r.Post("/", d.handleCreateJob)
@@ -262,6 +286,29 @@ func (d Deps) handleWorkers(w http.ResponseWriter, req *http.Request) {
 		out = append(out, nodeWorkers{Name: n.Name, Reachable: n.Reachable, Error: n.Error, Workers: n.Workers})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"nodes": out})
+}
+
+// handleCRDTState feeds the dashboard: every replica's CRDT internals plus
+// the computed convergence verdict.
+func (d Deps) handleCRDTState(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), clusterCheckTimeout)
+	defer cancel()
+	writeJSON(w, http.StatusOK, d.CRDT.Fetch(ctx))
+}
+
+// handleSetGossip returns the partition (false) / heal (true) handler.
+func (d Deps) handleSetGossip(enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		ctx, cancel := context.WithTimeout(req.Context(), clusterCheckTimeout)
+		defer cancel()
+		if err := d.CRDT.SetGossip(ctx, enabled); err != nil {
+			d.Log.Error().Err(err).Bool("enabled", enabled).Msg("set gossip failed")
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		d.Log.Warn().Bool("gossip_enabled", enabled).Msg("partition control applied")
+		writeJSON(w, http.StatusOK, map[string]bool{"gossip_enabled": enabled})
+	}
 }
 
 // healthResponse is the JSON shape of GET /health.

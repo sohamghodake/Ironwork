@@ -79,7 +79,7 @@ func (f *fakeStore) waitTerminal(t *testing.T, id string) string {
 
 func TestExecuteJobSucceeds(t *testing.T) {
 	fs := newFakeStore()
-	svc := workersvc.New("worker-1", fs, 2, zerolog.Nop())
+	svc := workersvc.New("worker-1", fs, 2, nil, zerolog.Nop())
 
 	resp, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
 		JobId: "job-1", Name: "sleep", Payload: []byte(`{"duration_ms":10}`),
@@ -94,7 +94,7 @@ func TestExecuteJobSucceeds(t *testing.T) {
 
 func TestExecuteJobHonorsFailFlag(t *testing.T) {
 	fs := newFakeStore()
-	svc := workersvc.New("worker-1", fs, 2, zerolog.Nop())
+	svc := workersvc.New("worker-1", fs, 2, nil, zerolog.Nop())
 
 	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
 		JobId: "job-2", Payload: []byte(`{"duration_ms":10,"fail":true}`),
@@ -106,7 +106,7 @@ func TestExecuteJobHonorsFailFlag(t *testing.T) {
 
 func TestExecuteJobInvalidPayloadFailsJob(t *testing.T) {
 	fs := newFakeStore()
-	svc := workersvc.New("worker-1", fs, 2, zerolog.Nop())
+	svc := workersvc.New("worker-1", fs, 2, nil, zerolog.Nop())
 
 	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
 		JobId: "job-3", Payload: []byte(`not json`),
@@ -119,22 +119,60 @@ func TestExecuteJobInvalidPayloadFailsJob(t *testing.T) {
 func TestExecuteJobUnknownJobIsNotFound(t *testing.T) {
 	fs := newFakeStore()
 	fs.notFound = true
-	svc := workersvc.New("worker-1", fs, 2, zerolog.Nop())
+	svc := workersvc.New("worker-1", fs, 2, nil, zerolog.Nop())
 
 	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{JobId: "ghost"})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestExecuteJobRequiresJobID(t *testing.T) {
-	svc := workersvc.New("worker-1", newFakeStore(), 2, zerolog.Nop())
+	svc := workersvc.New("worker-1", newFakeStore(), 2, nil, zerolog.Nop())
 
 	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+type fakeReporter struct {
+	mu      sync.Mutex
+	reports []string
+}
+
+func (f *fakeReporter) ReportJobEvent(_ context.Context, jobID, worker string, succeeded bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	outcome := "succeeded"
+	if !succeeded {
+		outcome = "failed"
+	}
+	f.reports = append(f.reports, jobID+":"+outcome+"@"+worker)
+}
+
+func TestTerminalOutcomesAreReported(t *testing.T) {
+	fs := newFakeStore()
+	rep := &fakeReporter{}
+	svc := workersvc.New("worker-1", fs, 2, rep, zerolog.Nop())
+
+	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
+		JobId: "ok-job", Payload: []byte(`{"duration_ms":10}`),
+	})
+	require.NoError(t, err)
+	_, err = svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
+		JobId: "bad-job", Payload: []byte(`{"duration_ms":10,"fail":true}`),
+	})
+	require.NoError(t, err)
+
+	fs.waitTerminal(t, "ok-job")
+	fs.waitTerminal(t, "bad-job")
+	svc.Drain(5 * time.Second)
+
+	rep.mu.Lock()
+	defer rep.mu.Unlock()
+	assert.ElementsMatch(t, []string{"ok-job:succeeded@worker-1", "bad-job:failed@worker-1"}, rep.reports)
+}
+
 func TestCapacityRejectsWithResourceExhausted(t *testing.T) {
 	fs := newFakeStore()
-	svc := workersvc.New("worker-1", fs, 1, zerolog.Nop()) // single slot
+	svc := workersvc.New("worker-1", fs, 1, nil, zerolog.Nop()) // single slot
 
 	_, err := svc.ExecuteJob(context.Background(), &ironworkv1.ExecuteJobRequest{
 		JobId: "q-1", Payload: []byte(`{"duration_ms":200}`),

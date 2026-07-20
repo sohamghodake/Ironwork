@@ -23,7 +23,8 @@ test-short: ## Tests that need no Docker
 
 certs: certs/ca.pem ## Generate mTLS material (prerequisite — nothing connects without it)
 
-certs/ca.pem:
+# Regenerates whenever the SAN list in the script changes.
+certs/ca.pem: scripts/gen-certs.sh
 	./scripts/gen-certs.sh
 
 dev: certs ## Boot the full cluster via compose
