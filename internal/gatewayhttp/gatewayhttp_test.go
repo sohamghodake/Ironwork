@@ -46,6 +46,8 @@ type fakeJobsClient struct {
 	getErr     error
 	listResp   *ironworkv1.ListJobsResponse
 	listErr    error
+	outboxResp *ironworkv1.GetOutboxStatsResponse
+	outboxErr  error
 
 	lastSubmit *ironworkv1.SubmitJobRequest
 	lastList   *ironworkv1.ListJobsRequest
@@ -63,6 +65,10 @@ func (f *fakeJobsClient) GetJob(_ context.Context, in *ironworkv1.GetJobRequest,
 func (f *fakeJobsClient) ListJobs(_ context.Context, in *ironworkv1.ListJobsRequest, _ ...grpc.CallOption) (*ironworkv1.ListJobsResponse, error) {
 	f.lastList = in
 	return f.listResp, f.listErr
+}
+
+func (f *fakeJobsClient) GetOutboxStats(context.Context, *ironworkv1.GetOutboxStatsRequest, ...grpc.CallOption) (*ironworkv1.GetOutboxStatsResponse, error) {
+	return f.outboxResp, f.outboxErr
 }
 
 func protoJob(status ironworkv1.JobStatus) *ironworkv1.Job {
@@ -177,6 +183,20 @@ func TestListJobs(t *testing.T) {
 
 	rec, _ = doJSON(t, h, http.MethodGet, "/jobs?limit=zap", "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestOutboxEndpoint(t *testing.T) {
+	jobs := &fakeJobsClient{outboxResp: &ironworkv1.GetOutboxStatsResponse{
+		Pending: 4, Dispatched: 12, Failed: 1, OldestPendingSeconds: 3.5,
+	}}
+	h := newRouter(&fakeHealthClient{}, jobs)
+
+	rec, body := doJSON(t, h, http.MethodGet, "/outbox", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, float64(4), body["pending"])
+	assert.Equal(t, float64(12), body["dispatched"])
+	assert.Equal(t, float64(1), body["failed"])
+	assert.InDelta(t, 3.5, body["oldest_pending_seconds"], 0.01)
 }
 
 // --- raft view ---

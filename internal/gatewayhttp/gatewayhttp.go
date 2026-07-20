@@ -135,6 +135,8 @@ func NewRouter(d Deps) http.Handler {
 	r.Post("/crdt/partition", d.handleSetGossip(false))
 	r.Post("/crdt/heal", d.handleSetGossip(true))
 
+	r.Get("/outbox", d.handleOutbox)
+
 	r.Route("/jobs", func(r chi.Router) {
 		r.Post("/", d.handleCreateJob)
 		r.Get("/", d.handleListJobs)
@@ -286,6 +288,27 @@ func (d Deps) handleWorkers(w http.ResponseWriter, req *http.Request) {
 		out = append(out, nodeWorkers{Name: n.Name, Reachable: n.Reachable, Error: n.Error, Workers: n.Workers})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"nodes": out})
+}
+
+// handleOutbox reports the transactional dispatch backlog: commands committed
+// but not yet relayed to a worker. A non-zero pending count with rising age
+// means dispatch is stalled (no capacity, or no leader) while the intent
+// survives durably.
+func (d Deps) handleOutbox(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithTimeout(req.Context(), readTimeout)
+	defer cancel()
+
+	resp, err := d.Jobs.GetOutboxStats(ctx, &ironworkv1.GetOutboxStatsRequest{})
+	if err != nil {
+		d.writeRPCError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pending":                resp.Pending,
+		"dispatched":             resp.Dispatched,
+		"failed":                 resp.Failed,
+		"oldest_pending_seconds": resp.OldestPendingSeconds,
+	})
 }
 
 // handleCRDTState feeds the dashboard: every replica's CRDT internals plus
