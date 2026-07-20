@@ -136,29 +136,6 @@ func TestReclaimJobs(t *testing.T) {
 	assert.Equal(t, store.StatusSucceeded, got.Status, "terminal jobs untouched")
 }
 
-func TestListUnplaced(t *testing.T) {
-	s := newTestStore(t)
-	ctx := context.Background()
-
-	stale, err := s.CreateJob(ctx, "stale-pending", nil)
-	require.NoError(t, err)
-	placed, err := s.CreateJob(ctx, "placed", nil)
-	require.NoError(t, err)
-	require.NoError(t, s.MarkScheduled(ctx, placed.ID, "worker-1"))
-
-	// Nothing is older than a minute yet.
-	jobs, err := s.ListUnplaced(ctx, time.Minute, 10)
-	require.NoError(t, err)
-	assert.Empty(t, jobs)
-
-	// With a zero threshold the stale pending job qualifies; the placed one
-	// never does.
-	jobs, err = s.ListUnplaced(ctx, 0, 10)
-	require.NoError(t, err)
-	require.Len(t, jobs, 1)
-	assert.Equal(t, stale.ID, jobs[0].ID)
-}
-
 func TestListJobsFilterAndOrder(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

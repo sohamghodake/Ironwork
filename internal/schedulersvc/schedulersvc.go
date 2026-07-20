@@ -1,8 +1,8 @@
-// Package schedulersvc implements the scheduler's JobService: SubmitJob
-// persists a job and places it on a worker (Phase 2: round-robin with
-// fall-through — the same dumb placement the gateway used in Phase 1, now
-// behind the scheduler seam); GetJob/ListJobs serve the gateway's reads.
-// Raft leadership gates placement from Phase 3 on.
+// Package schedulersvc implements the scheduler's JobService. From Phase 6,
+// SubmitJob persists the job and its dispatch command in one transaction (the
+// transactional outbox) and wakes the leader's relay — it never dispatches
+// inline. GetJob/ListJobs serve the gateway's reads; GetOutboxStats reports
+// the dispatch backlog. Raft leadership gates submission from Phase 3 on.
 package schedulersvc
 
 import (
@@ -27,14 +27,10 @@ const (
 
 // JobStore is the slice of store.Store the scheduler needs.
 type JobStore interface {
-	CreateJob(ctx context.Context, name string, payload []byte) (*store.Job, error)
+	CreateJobWithOutbox(ctx context.Context, name string, payload []byte) (*store.Job, error)
 	GetJob(ctx context.Context, id string) (*store.Job, error)
 	ListJobs(ctx context.Context, status string, limit int) ([]*store.Job, error)
-}
-
-// JobDispatcher places an accepted job on a worker.
-type JobDispatcher interface {
-	Dispatch(ctx context.Context, job *store.Job) (workerInstance string, err error)
+	OutboxStats(ctx context.Context) (store.OutboxStats, error)
 }
 
 // Leadership reports this scheduler's role in the Raft consensus group.
@@ -43,9 +39,10 @@ type Leadership interface {
 	LeaderID() string
 }
 
-// PlacementLog replicates placement decisions to the consensus group.
-type PlacementLog interface {
-	ApplyPlacement(jobID, worker string) error
+// Waker nudges the outbox relay to dispatch a freshly enqueued command
+// without waiting for its next tick.
+type Waker interface {
+	Wake()
 }
 
 // Server implements JobService for the scheduler.
@@ -53,21 +50,20 @@ type Server struct {
 	ironworkv1.UnimplementedJobServiceServer
 
 	store JobStore
-	disp  JobDispatcher
 	lead  Leadership
-	plog  PlacementLog
+	waker Waker
 	log   zerolog.Logger
 }
 
 // New builds the scheduler's job service.
-func New(st JobStore, disp JobDispatcher, lead Leadership, plog PlacementLog, log zerolog.Logger) *Server {
-	return &Server{store: st, disp: disp, lead: lead, plog: plog, log: log}
+func New(st JobStore, lead Leadership, waker Waker, log zerolog.Logger) *Server {
+	return &Server{store: st, lead: lead, waker: waker, log: log}
 }
 
 // SubmitJob persists the job and places it. Only the Raft leader accepts
 // submissions; followers reject fast so the gateway can route onward. The job
-// resource is created even when placement fails — the failure is recorded on
-// the job itself.
+// resource and its dispatch command are committed together; the job returns
+// as "pending" and the relay places it moments later.
 func (s *Server) SubmitJob(ctx context.Context, req *ironworkv1.SubmitJobRequest) (*ironworkv1.SubmitJobResponse, error) {
 	if !s.lead.IsLeader() {
 		return nil, status.Errorf(codes.FailedPrecondition, "not leader (leader: %s)", s.lead.LeaderID())
@@ -76,33 +72,35 @@ func (s *Server) SubmitJob(ctx context.Context, req *ironworkv1.SubmitJobRequest
 		return nil, status.Error(codes.InvalidArgument, "name is required (max 200 chars)")
 	}
 
-	job, err := s.store.CreateJob(ctx, req.Name, req.Payload)
+	// One transaction: the job and its dispatch command land together, so the
+	// intent to place the job is durable the instant SubmitJob returns — no
+	// dual write, nothing to lose if the leader crashes before dispatching.
+	job, err := s.store.CreateJobWithOutbox(ctx, req.Name, req.Payload)
 	if err != nil {
-		s.log.Error().Err(err).Msg("create job")
+		s.log.Error().Err(err).Msg("create job with outbox")
 		return nil, status.Error(codes.Internal, "create job")
 	}
+	s.log.Info().Str("job_id", job.ID).Msg("job enqueued for dispatch")
 
-	if worker, err := s.disp.Dispatch(ctx, job); err != nil {
-		// All workers full or unreachable: the job stays pending and the
-		// leader's reaper retries placement until capacity frees up or the
-		// job exceeds its placement budget. This is backpressure surfacing
-		// to the API as status "pending", not an error.
-		s.log.Warn().Err(err).Str("job_id", job.ID).Msg("placement deferred")
-	} else {
-		s.log.Info().Str("job_id", job.ID).Str("worker", worker).Msg("job placed")
-		// Replicate the decision through the Raft log. The job is already
-		// placed — this is the authority trail, not the placement mechanism —
-		// so a failed apply (e.g. leadership lost mid-flight) only warns.
-		if aerr := s.plog.ApplyPlacement(job.ID, worker); aerr != nil {
-			s.log.Warn().Err(aerr).Str("job_id", job.ID).Msg("placement log apply failed")
-		}
-	}
+	// Nudge the relay so placement happens now rather than on its next tick.
+	s.waker.Wake()
 
-	// Re-read: the accepting worker has already recorded at least "scheduled".
-	if fresh, err := s.store.GetJob(ctx, job.ID); err == nil {
-		job = fresh
-	}
 	return &ironworkv1.SubmitJobResponse{Job: protoconv.JobToProto(job)}, nil
+}
+
+// GetOutboxStats reports the current dispatch backlog.
+func (s *Server) GetOutboxStats(ctx context.Context, _ *ironworkv1.GetOutboxStatsRequest) (*ironworkv1.GetOutboxStatsResponse, error) {
+	stats, err := s.store.OutboxStats(ctx)
+	if err != nil {
+		s.log.Error().Err(err).Msg("outbox stats")
+		return nil, status.Error(codes.Internal, "outbox stats")
+	}
+	return &ironworkv1.GetOutboxStatsResponse{
+		Pending:              stats.Pending,
+		Dispatched:           stats.Dispatched,
+		Failed:               stats.Failed,
+		OldestPendingSeconds: stats.OldestPending.Seconds(),
+	}, nil
 }
 
 // GetJob fetches one job by id.

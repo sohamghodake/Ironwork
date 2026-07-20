@@ -174,30 +174,6 @@ func (s *Store) ReclaimJobs(ctx context.Context, workerInstance string) ([]*Job,
 	return jobs, nil
 }
 
-// ListUnplaced returns pending jobs that have sat unplaced for at least
-// olderThan — placement retry candidates for the leader's sweep loop.
-func (s *Store) ListUnplaced(ctx context.Context, olderThan time.Duration, limit int) ([]*Job, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+jobColumns+` FROM jobs
-		 WHERE status = $1 AND updated_at < now() - make_interval(secs => $2)
-		 ORDER BY created_at ASC LIMIT $3`,
-		StatusPending, olderThan.Seconds(), limit)
-	if err != nil {
-		return nil, fmt.Errorf("store: list unplaced: %w", err)
-	}
-	defer rows.Close()
-
-	jobs := []*Job{}
-	for rows.Next() {
-		j, err := scanJob(rows)
-		if err != nil {
-			return nil, err
-		}
-		jobs = append(jobs, j)
-	}
-	return jobs, rows.Err()
-}
-
 func (s *Store) exec(ctx context.Context, sql string, args ...any) error {
 	tag, err := s.pool.Exec(ctx, sql, args...)
 	if err != nil {

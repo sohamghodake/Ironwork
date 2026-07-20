@@ -18,6 +18,7 @@ import (
 	"github.com/sohamghodake/ironwork/internal/dispatch"
 	"github.com/sohamghodake/ironwork/internal/healthsvc"
 	"github.com/sohamghodake/ironwork/internal/heartbeat"
+	"github.com/sohamghodake/ironwork/internal/outbox"
 	"github.com/sohamghodake/ironwork/internal/raftnode"
 	"github.com/sohamghodake/ironwork/internal/reaper"
 	"github.com/sohamghodake/ironwork/internal/registry"
@@ -72,18 +73,24 @@ func main() {
 	}
 
 	st := store.New(pool)
+
+	// The outbox relay is the sole dispatcher: SubmitJob and the reaper enqueue
+	// commands, the relay drains them to workers (leader-only).
+	relay := outbox.New(st, disp, node, node, log)
+	svcCtx, svcCancel := context.WithCancel(context.Background())
+	defer svcCancel()
+	go relay.Run(svcCtx)
+
 	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverTLS)))
-	ironworkv1.RegisterJobServiceServer(srv, schedulersvc.New(st, disp, node, node, log))
+	ironworkv1.RegisterJobServiceServer(srv, schedulersvc.New(st, node, relay, log))
 	ironworkv1.RegisterStateServiceServer(srv, schedulersvc.NewStateServer(cfg.Instance, node, reg))
 	ironworkv1.RegisterWorkerServiceServer(srv, schedulersvc.NewWorkerServer(reg, heartbeat.Interval, log))
 	ironworkv1.RegisterHealthServiceServer(srv, healthsvc.New(cfg.Component, cfg.Instance))
 
-	// Leader-only maintenance: reclaim jobs from dead workers, retry
-	// unplaced pending jobs.
-	rp := reaper.New(st, disp, reg, node, node, log)
-	rpCtx, rpCancel := context.WithCancel(context.Background())
-	defer rpCancel()
-	go rp.Run(rpCtx)
+	// Leader-only crash detection: reclaim jobs from dead workers (which
+	// re-enqueues them) and wake the relay to re-place them.
+	rp := reaper.New(st, reg, node, relay, log)
+	go rp.Run(svcCtx)
 
 	log.Info().Int("workers", len(cfg.Workers)).Int("raft_peers", len(cfg.RaftPeers)).Msg("scheduler starting")
 	app.ServeGRPC(srv, cfg.GRPCAddr, log)

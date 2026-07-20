@@ -47,6 +47,14 @@ func (f *fakeJobs) ListJobs(context.Context, *ironworkv1.ListJobsRequest, ...grp
 	return &ironworkv1.ListJobsResponse{}, nil
 }
 
+func (f *fakeJobs) GetOutboxStats(context.Context, *ironworkv1.GetOutboxStatsRequest, ...grpc.CallOption) (*ironworkv1.GetOutboxStatsResponse, error) {
+	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &ironworkv1.GetOutboxStatsResponse{}, nil
+}
+
 func testRouter(clients ...*fakeJobs) *Router {
 	r := &Router{log: zerolog.Nop()}
 	for _, c := range clients {

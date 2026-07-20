@@ -22,11 +22,12 @@ const testJobID = "3f6f2be8-7c1e-4b3a-9f10-6a4a1c2d3e4f"
 type fakeStore struct {
 	jobs      map[string]*store.Job
 	createErr error
+	stats     store.OutboxStats
 }
 
 func newFakeStore() *fakeStore { return &fakeStore{jobs: map[string]*store.Job{}} }
 
-func (f *fakeStore) CreateJob(_ context.Context, name string, payload []byte) (*store.Job, error) {
+func (f *fakeStore) CreateJobWithOutbox(_ context.Context, name string, payload []byte) (*store.Job, error) {
 	if f.createErr != nil {
 		return nil, f.createErr
 	}
@@ -54,34 +55,8 @@ func (f *fakeStore) ListJobs(_ context.Context, filter string, _ int) ([]*store.
 	return out, nil
 }
 
-func (f *fakeStore) MarkFinished(_ context.Context, id string, succeeded bool, errMsg string) error {
-	j, ok := f.jobs[id]
-	if !ok {
-		return store.ErrNotFound
-	}
-	j.Status = store.StatusFailed
-	if succeeded {
-		j.Status = store.StatusSucceeded
-	}
-	j.Error = errMsg
-	return nil
-}
-
-// fakeDispatcher mimics a worker recording acceptance before acking.
-type fakeDispatcher struct {
-	st  *fakeStore
-	err error
-}
-
-func (f *fakeDispatcher) Dispatch(_ context.Context, job *store.Job) (string, error) {
-	if f.err != nil {
-		return "", f.err
-	}
-	if j, ok := f.st.jobs[job.ID]; ok {
-		j.Status = store.StatusScheduled
-		j.AssignedWorker = "worker-1"
-	}
-	return "worker-1", nil
+func (f *fakeStore) OutboxStats(context.Context) (store.OutboxStats, error) {
+	return f.stats, nil
 }
 
 type fakeLeadership struct {
@@ -92,58 +67,66 @@ type fakeLeadership struct {
 func (f fakeLeadership) IsLeader() bool   { return f.leader }
 func (f fakeLeadership) LeaderID() string { return f.id }
 
-type fakePlacementLog struct {
-	applied []string
-	err     error
+type fakeWaker struct{ wakes int }
+
+func (f *fakeWaker) Wake() { f.wakes++ }
+
+func newLeaderSvc(st *fakeStore, waker *fakeWaker) *schedulersvc.Server {
+	return schedulersvc.New(st, fakeLeadership{leader: true, id: "scheduler-1"}, waker, zerolog.Nop())
 }
 
-func (f *fakePlacementLog) ApplyPlacement(jobID, worker string) error {
-	f.applied = append(f.applied, jobID+"@"+worker)
-	return f.err
-}
-
-func newLeaderSvc(st *fakeStore, disp *fakeDispatcher, plog *fakePlacementLog) *schedulersvc.Server {
-	return schedulersvc.New(st, disp, fakeLeadership{leader: true, id: "scheduler-1"}, plog, zerolog.Nop())
-}
-
-func TestSubmitJobPlaces(t *testing.T) {
+func TestSubmitJobEnqueuesAndWakes(t *testing.T) {
 	st := newFakeStore()
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
+	waker := &fakeWaker{}
+	svc := newLeaderSvc(st, waker)
 
 	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{
 		Name: "sleep", Payload: []byte(`{"duration_ms":100}`),
 	})
 	require.NoError(t, err)
 
+	// The job is committed as pending; the relay places it asynchronously.
 	assert.Equal(t, testJobID, resp.Job.Id)
-	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_SCHEDULED, resp.Job.Status)
-	assert.Equal(t, "worker-1", resp.Job.AssignedWorkerId)
+	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_PENDING, resp.Job.Status)
+	assert.Empty(t, resp.Job.AssignedWorkerId)
 	assert.Equal(t, []byte(`{"duration_ms":100}`), resp.Job.Payload)
+	assert.Equal(t, 1, waker.wakes, "submit should wake the relay")
 }
 
-func TestSubmitJobPlacementFailureLeavesPending(t *testing.T) {
+func TestSubmitJobCreateErrorIsInternal(t *testing.T) {
 	st := newFakeStore()
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("all workers full")}, &fakePlacementLog{})
+	st.createErr = errors.New("db down")
+	waker := &fakeWaker{}
+	svc := newLeaderSvc(st, waker)
 
-	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
-	require.NoError(t, err)
-
-	// Backpressure: the job stays pending for the reaper's retry sweep
-	// instead of failing outright.
-	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_PENDING, resp.Job.Status)
-	assert.Empty(t, resp.Job.Error)
+	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Zero(t, waker.wakes, "a failed enqueue must not wake the relay")
 }
 
 func TestSubmitJobValidatesName(t *testing.T) {
-	svc := newLeaderSvc(newFakeStore(), &fakeDispatcher{}, &fakePlacementLog{})
+	svc := newLeaderSvc(newFakeStore(), &fakeWaker{})
 
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestSubmitJobFollowerRejectsFast(t *testing.T) {
+	st := newFakeStore()
+	waker := &fakeWaker{}
+	svc := schedulersvc.New(st, fakeLeadership{leader: false, id: "scheduler-2"}, waker, zerolog.Nop())
+
+	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
+
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "scheduler-2")
+	assert.Empty(t, st.jobs, "followers must not persist jobs")
+	assert.Zero(t, waker.wakes)
+}
+
 func TestGetJob(t *testing.T) {
 	st := newFakeStore()
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
+	svc := newLeaderSvc(st, &fakeWaker{})
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
 
@@ -158,57 +141,14 @@ func TestGetJob(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
-func TestSubmitJobFollowerRejectsFast(t *testing.T) {
-	st := newFakeStore()
-	svc := schedulersvc.New(st, &fakeDispatcher{st: st},
-		fakeLeadership{leader: false, id: "scheduler-2"}, &fakePlacementLog{}, zerolog.Nop())
-
-	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
-
-	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), "scheduler-2")
-	assert.Empty(t, st.jobs, "followers must not persist jobs")
-}
-
-func TestSubmitJobReplicatesPlacement(t *testing.T) {
-	st := newFakeStore()
-	plog := &fakePlacementLog{}
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, plog)
-
-	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
-	require.NoError(t, err)
-
-	assert.Equal(t, []string{testJobID + "@worker-1"}, plog.applied)
-}
-
-func TestSubmitJobApplyFailureDoesNotFailSubmit(t *testing.T) {
-	st := newFakeStore()
-	plog := &fakePlacementLog{err: errors.New("leadership lost")}
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, plog)
-
-	resp, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
-	require.NoError(t, err)
-	assert.Equal(t, ironworkv1.JobStatus_JOB_STATUS_SCHEDULED, resp.Job.Status)
-}
-
-func TestSubmitJobNoPlacementLogOnDispatchFailure(t *testing.T) {
-	st := newFakeStore()
-	plog := &fakePlacementLog{}
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st, err: errors.New("workers down")}, plog)
-
-	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
-	require.NoError(t, err)
-	assert.Empty(t, plog.applied, "failed placements must not enter the log")
-}
-
 func TestListJobsFilters(t *testing.T) {
 	st := newFakeStore()
-	svc := newLeaderSvc(st, &fakeDispatcher{st: st}, &fakePlacementLog{})
+	svc := newLeaderSvc(st, &fakeWaker{})
 	_, err := svc.SubmitJob(context.Background(), &ironworkv1.SubmitJobRequest{Name: "sleep"})
 	require.NoError(t, err)
 
 	resp, err := svc.ListJobs(context.Background(), &ironworkv1.ListJobsRequest{
-		StatusFilter: ironworkv1.JobStatus_JOB_STATUS_SCHEDULED,
+		StatusFilter: ironworkv1.JobStatus_JOB_STATUS_PENDING,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.Jobs, 1)
@@ -218,4 +158,17 @@ func TestListJobsFilters(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Empty(t, resp.Jobs)
+}
+
+func TestGetOutboxStats(t *testing.T) {
+	st := newFakeStore()
+	st.stats = store.OutboxStats{Pending: 3, Dispatched: 10, Failed: 1, OldestPending: 2 * time.Second}
+	svc := newLeaderSvc(st, &fakeWaker{})
+
+	resp, err := svc.GetOutboxStats(context.Background(), &ironworkv1.GetOutboxStatsRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(3), resp.Pending)
+	assert.Equal(t, uint64(10), resp.Dispatched)
+	assert.Equal(t, uint64(1), resp.Failed)
+	assert.InDelta(t, 2.0, resp.OldestPendingSeconds, 0.01)
 }
