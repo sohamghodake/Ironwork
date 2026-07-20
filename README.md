@@ -7,14 +7,15 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 5 complete.** Two statemanager replicas hold an
-> eventually-consistent job-statistics view built on hand-rolled CRDTs
-> (grow-only counters + a last-writer-wins map), converging by push-pull
-> gossip. The **dashboard at `localhost:8080/crdt`** makes it visible: submit
-> jobs, **Partition** the replicas (gossip off) and watch their shard counts
-> diverge, then **Heal** and watch them snap back to identical state — no
-> lost increments. Earlier phases: Raft-led placement (`GET /raft`),
-> backpressure + crash reassignment (`GET /workers`).
+> **Status: Phase 6 complete.** Dispatch now flows through a **transactional
+> outbox**: `SubmitJob` commits the job *and* its dispatch command in one
+> Postgres transaction and returns `pending`; a leader-side relay drains the
+> outbox to workers (at-least-once). The intent to run a job survives a
+> scheduler crash — stop the workers, submit jobs (they buffer durably),
+> `docker compose kill` the Raft leader, restart the workers, and the new
+> leader's relay still dispatches every one. `GET /outbox` shows the backlog.
+> Earlier phases: CRDT convergence (`/crdt`), Raft placement (`/raft`),
+> backpressure + crash reassignment (`/workers`).
 
 ## Quickstart
 
@@ -78,11 +79,14 @@ POST /jobs
         └─ JobService.SubmitJob        (mTLS gRPC → whichever scheduler LEADS)
              │    followers reject FailedPrecondition; the gateway walks the
              │    set leader-first and caches whoever accepts
-             └─ leader: INSERT jobs row (pending)
-                  ├─ WorkerService.ExecuteJob   (round-robin + failover)
-                  │    └─ worker: UPDATE scheduled → ack
-                  │         └─ async: UPDATE running → sleep → succeeded/failed
-                  └─ Raft log ← placement decision (replicates to all 3 FSMs)
+             └─ leader: BEGIN … INSERT job (pending) + INSERT outbox … COMMIT
+                  └─ returns pending; wakes the relay          (Phase 6)
+                       └─ relay (leader-only) drains the outbox:
+                            ├─ WorkerService.ExecuteJob   (live, non-full worker)
+                            │    └─ worker: UPDATE scheduled → ack
+                            │         └─ async: running → sleep → succeeded/failed
+                            ├─ mark outbox row dispatched
+                            └─ Raft log ← placement decision (replicates to 3 FSMs)
 GET /jobs/{id}
    └─ gateway → JobService.GetJob → any scheduler reads Postgres
 ```
@@ -191,6 +195,40 @@ CRDT total then equals the Postgres terminal count. Kill and restart a replica
 and it rejoins empty, catching up to full state in a single push-pull exchange
 (state transfer *is* a merge).
 
+## Transactional outbox (Phase 6)
+
+Dispatch never rides directly on the submit request. `SubmitJob` writes the
+job **and** a dispatch command to the `outbox` table in **one transaction**
+(`CreateJobWithOutbox`) and returns `pending`; a leader-only relay
+(`internal/outbox`) reads pending commands and hands the jobs to workers,
+marking each dispatched. This removes the dual-write hazard — there is no
+window where a job is committed but its dispatch was lost, or dispatched but
+not committed — and gives **at-least-once** delivery that survives a scheduler
+crash (the relay reconciles a command whose job already moved past `pending`,
+so re-delivery is safe). The crash reaper (Phase 4) now *produces* to the
+outbox too: reclaiming a dead worker's jobs re-enqueues their commands in the
+same transaction. Budgets: 3 execution attempts, 30 dispatch attempts.
+
+**See the durability guarantee** — the intent to run a job outlives the
+scheduler that accepted it:
+
+```sh
+docker compose stop worker-1 worker-2          # nothing can dispatch
+for i in $(seq 5); do curl -s -X POST localhost:8080/jobs \
+  -d '{"name":"durable","payload":{"duration_ms":400}}' -o /dev/null; done
+curl -s localhost:8080/outbox                  # {"pending":5, ...} — committed, undispatched
+
+docker compose kill $(…leader from /raft…)     # SIGKILL the leader mid-backlog
+docker compose start worker-1 worker-2         # bring workers back
+curl -s localhost:8080/outbox                  # the NEW leader's relay drains it to 0
+curl -s 'localhost:8080/jobs?limit=20'         # all five durable jobs succeeded
+```
+
+Every command committed before the crash is dispatched by a *different*
+scheduler after it — `dispatched` climbs to the full count, `pending` returns
+to 0, `failed` stays 0. Under normal load the relay is woken on submit, so
+`pending` is usually 0 and dispatch latency is sub-tick.
+
 ## How the health check flows
 
 ```
@@ -228,8 +266,9 @@ taken by other local stacks).
 proto/ironwork/v1/   contracts: JobService, WorkerService, StateService, HealthService
 gen/                 committed buf codegen output — never hand-edit
 cmd/                 gateway, scheduler, worker, statemanager, observer, migrate
-internal/            config (viper), logging (zerolog), tlsutil, health/observer/gateway logic
-migrations/          goose SQL — jobs table range-partitioned by created_at
+internal/            config, logging, tlsutil, raftnode, registry, reaper,
+                     outbox (dispatch relay), crdt, statesvc, gateway/observer logic
+migrations/          goose SQL — partitioned jobs table + dispatch outbox
 deploy/postgres/     primary replication init + replica bootstrap scripts
 ```
 
@@ -243,7 +282,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 | **3 ✅** | **Raft across 3 schedulers** — election + failover (the hard milestone) | `GET /raft`: leader re-elected on kill, placement log identical on all nodes |
 | **4 ✅** | Worker backpressure + heartbeat crash detection & reassignment | kill worker mid-job → job finishes elsewhere, `attempts: 2`; `GET /workers` liveness |
 | **5 ✅** | CRDT statemanager | `localhost:8080/crdt` dashboard: Partition → shards diverge, Heal → reconverge, no lost increments |
-| 6 | Transactional outbox dispatch | — |
+| **6 ✅** | Transactional outbox dispatch | kill leader mid-backlog → new leader's relay still dispatches every buffered job; `GET /outbox` |
 | 7 | OTEL + Prometheus, frontend instrument panel | — |
 
 Stack: Go 1.23 · gRPC + buf remote plugins · pgx v5 · goose v3 · chi ·
