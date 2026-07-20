@@ -11,6 +11,22 @@ service JobService {
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  // GetOutboxStats reports the transactional dispatch outbox's backlog
+  // (Phase 6). Served by any scheduler — a plain Postgres read.
+  rpc GetOutboxStats(GetOutboxStatsRequest) returns (GetOutboxStatsResponse);
+}
+
+message GetOutboxStatsRequest {}
+
+message GetOutboxStatsResponse {
+  // Dispatch commands committed but not yet relayed to a worker.
+  uint64 pending = 1;
+  // Successfully relayed.
+  uint64 dispatched = 2;
+  // Abandoned after exhausting dispatch/execution budgets.
+  uint64 failed = 3;
+  // Age of the oldest pending command; 0 when the outbox is drained.
+  double oldest_pending_seconds = 4;
 }
 
 enum JobStatus {

@@ -157,6 +157,13 @@ func (r *Router) ListJobs(ctx context.Context, in *ironworkv1.ListJobsRequest, o
 	})
 }
 
+// GetOutboxStats is a plain Postgres read any scheduler can serve.
+func (r *Router) GetOutboxStats(ctx context.Context, in *ironworkv1.GetOutboxStatsRequest, opts ...grpc.CallOption) (*ironworkv1.GetOutboxStatsResponse, error) {
+	return route(r, ctx, func(c ironworkv1.JobServiceClient) (*ironworkv1.GetOutboxStatsResponse, error) {
+		return c.GetOutboxStats(ctx, in, opts...)
+	})
+}
+
 // NodeStatus is one scheduler's consensus view (or its unreachability).
 type NodeStatus struct {
 	Name         string       `json:"name"`
