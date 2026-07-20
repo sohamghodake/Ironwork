@@ -7,13 +7,14 @@ eventual consistency, transactional outbox, and full observability.
 A **job** here is a unit of work placed and executed across worker nodes
 (think Kubernetes scheduler or CI runner pool) — not cron time-scheduling.
 
-> **Status: Phase 4 complete.** Workers enforce backpressure (`ExecuteJob`
-> rejects at capacity; overflow jobs wait as `pending` and drain as slots
-> free) and heartbeat liveness+load to every scheduler. The Raft leader's
-> reaper detects crashed workers by dead heartbeats (~8s), reclaims their
-> in-flight jobs, and re-places them on live workers — kill a worker mid-job
-> and watch the job finish elsewhere with `attempts: 2`. `GET /workers`
-> shows the live worker table; `GET /raft` the consensus view.
+> **Status: Phase 5 complete.** Two statemanager replicas hold an
+> eventually-consistent job-statistics view built on hand-rolled CRDTs
+> (grow-only counters + a last-writer-wins map), converging by push-pull
+> gossip. The **dashboard at `localhost:8080/crdt`** makes it visible: submit
+> jobs, **Partition** the replicas (gossip off) and watch their shard counts
+> diverge, then **Heal** and watch them snap back to identical state — no
+> lost increments. Earlier phases: Raft-led placement (`GET /raft`),
+> backpressure + crash reassignment (`GET /workers`).
 
 ## Quickstart
 
@@ -38,7 +39,8 @@ Expected: HTTP 200 with every component `SERVING`:
     {"name": "scheduler-1", "status": "SERVING"},
     {"name": "scheduler-2", "status": "SERVING"},
     {"name": "scheduler-3", "status": "SERVING"},
-    {"name": "statemanager", "status": "SERVING"},
+    {"name": "statemanager-1", "status": "SERVING"},
+    {"name": "statemanager-2", "status": "SERVING"},
     {"name": "worker-1", "status": "SERVING"},
     {"name": "worker-2", "status": "SERVING"}
   ]
@@ -149,6 +151,46 @@ Timeline: ~8s of `running worker-1` (heartbeats aging), then the reaper logs
 `running worker-2, attempts: 2`, finishing there. `GET /workers` shows
 `worker-1: alive=false` until its heartbeats resume.
 
+## CRDT convergence (Phase 5)
+
+The two statemanager replicas keep an **eventually-consistent statistics view**
+of job outcomes — Postgres stays the source of truth; the statemanager is the
+coordination-free *view* that stays writable under partition and always merges.
+It is built on two hand-rolled CRDTs (`internal/crdt`, zero deps):
+
+- a **G-Counter** per status and per worker — each replica increments only its
+  own shard, so concurrent writes never conflict and `Merge` is the pointwise
+  maximum (`succeeded → {statemanager-1: 4, statemanager-2: 4}`, value 8);
+- an **LWW map** of recent outcomes — newer timestamp wins, ties break on
+  replica id so every replica agrees.
+
+`Merge` is commutative, associative, and idempotent (proved as law tests in
+`internal/crdt`), so replicas converge regardless of gossip order or
+repetition. Each worker reports its outcomes to **its own** replica
+(worker-1 → statemanager-1, worker-2 → statemanager-2), and the replicas
+push-pull gossip every second.
+
+**Run the whole demo from `localhost:8080/crdt`** (buttons: Submit 5 jobs,
+Partition, Heal), or from the CLI:
+
+```sh
+curl -s localhost:8080/crdt/state        # both replicas identical → CONVERGED
+curl -s -X POST localhost:8080/crdt/partition   # gossip off on both replicas
+for i in $(seq 6); do curl -s -X POST localhost:8080/jobs \
+  -d '{"name":"split","payload":{"duration_ms":300}}' -o /dev/null; done
+curl -s localhost:8080/crdt/state        # shards diverge → DIVERGED
+curl -s -X POST localhost:8080/crdt/heal        # gossip back on
+curl -s localhost:8080/crdt/state        # one gossip round later → CONVERGED
+```
+
+What you'll see: while partitioned, statemanager-1 sees `{sm-1: 4, sm-2: 2}`
+and statemanager-2 sees `{sm-1: 2, sm-2: 4}` — each advanced only its own
+shard, neither can see the other. After heal, both snap to `{sm-1: 4, sm-2: 4}`
+within one gossip round (pointwise-max merge), with **no increment lost** — the
+CRDT total then equals the Postgres terminal count. Kill and restart a replica
+and it rejoins empty, catching up to full state in a single push-pull exchange
+(state transfer *is* a merge).
+
 ## How the health check flows
 
 ```
@@ -200,7 +242,7 @@ deploy/postgres/     primary replication init + replica bootstrap scripts
 | **2 ✅** | Scheduler service in the placement path (single instance) | placement in scheduler-1 logs |
 | **3 ✅** | **Raft across 3 schedulers** — election + failover (the hard milestone) | `GET /raft`: leader re-elected on kill, placement log identical on all nodes |
 | **4 ✅** | Worker backpressure + heartbeat crash detection & reassignment | kill worker mid-job → job finishes elsewhere, `attempts: 2`; `GET /workers` liveness |
-| 5 | CRDT statemanager | divergence/reconvergence visualization |
+| **5 ✅** | CRDT statemanager | `localhost:8080/crdt` dashboard: Partition → shards diverge, Heal → reconverge, no lost increments |
 | 6 | Transactional outbox dispatch | — |
 | 7 | OTEL + Prometheus, frontend instrument panel | — |
 
